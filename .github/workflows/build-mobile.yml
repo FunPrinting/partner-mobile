@@ -12,29 +12,37 @@ jobs:
 
     defaults:
       run:
-        working-directory: partner-mobile
+        working-directory: .
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
+      - name: Setup Java
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
-
-      - name: Setup Expo
-        uses: expo/expo-github-action@v8
-        with:
-          expo-version: latest
-          eas-version: latest
-          token: ${{ secrets.EXPO_TOKEN }} # Must be configured in GitHub Repo Secrets
+          node-version: 22
 
       - name: Install Dependencies
         run: npm ci || npm install
 
-      - name: Build Android APK
-        run: eas build --platform android --profile preview --non-interactive
+      - name: Prebuild Expo Android
+        run: npx expo prebuild -p android --clean
 
-      # EAS automatically uploads the build to the Expo servers. 
-      # The web dashboard will fetch the URL via the EAS API.
+      - name: Build Android APK
+        working-directory: ./android
+        run: ./gradlew assembleRelease
+
+      - name: Create Release & Upload Asset
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: Latest Release
+          files: android/app/build/outputs/apk/release/app-release.apk
+          generate_release_notes: true
