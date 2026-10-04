@@ -34,6 +34,12 @@ jobs:
       - name: Install Dependencies
         run: npm ci || npm install
 
+      - name: Bump Version
+        run: |
+          npm version 1.0.${{ github.run_number }} --no-git-tag-version
+          sed -i 's/"version": "1.0.0"/"version": "1.0.'${{ github.run_number }}'"/' app.json
+          sed -i 's/"versionCode": 1/"versionCode": '${{ github.run_number }}'/' app.json || true
+
       - name: Prebuild Expo Android
         run: npx expo prebuild -p android --clean
 
@@ -44,7 +50,7 @@ jobs:
       - name: Create Release & Upload Asset
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: latest
-          name: Latest Release
+          tag_name: v1.0.${{ github.run_number }}
+          name: Release v1.0.${{ github.run_number }}
           files: android/app/build/outputs/apk/release/app-release.apk
           generate_release_notes: true
