@@ -5,6 +5,9 @@ import * as Print from 'expo-print';
 import * as SecureStore from 'expo-secure-store';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
+import * as FileSystem from 'expo-file-system';
+import * as IntentLauncher from 'expo-intent-launcher';
+import Constants from 'expo-constants';
 
 export default function App() {
   const [partnerId, setPartnerId] = useState('');
@@ -20,6 +23,50 @@ export default function App() {
   const [printerIp, setPrinterIp] = useState('192.168.1.100');
   const appModeRef = useRef('remote');
   const printerIpRef = useRef('192.168.1.100');
+
+  // Phase 7: Update Checking
+  const [updateStatus, setUpdateStatus] = useState('Check for Updates');
+
+  const checkForUpdates = async () => {
+    try {
+      setUpdateStatus('Checking...');
+      const response = await fetch('https://api.github.com/repos/FunPrinting/partner-mobile/releases/latest');
+      const data = await response.json();
+      const latestVersion = data.tag_name;
+      
+      const currentVersion = `v${Constants.expoConfig?.version || '1.0.0'}`;
+      
+      if (latestVersion && latestVersion !== currentVersion) {
+        setUpdateStatus(`Update Found (${latestVersion})! Downloading...`);
+        const apkAsset = data.assets.find(a => a.name.endsWith('.apk'));
+        if (apkAsset) {
+          const downloadUrl = apkAsset.browser_download_url;
+          const fileUri = `${FileSystem.documentDirectory}update.apk`;
+          
+          await FileSystem.downloadAsync(downloadUrl, fileUri);
+          setUpdateStatus('Installing...');
+          
+          const contentUri = await FileSystem.getContentUriAsync(fileUri);
+          await IntentLauncher.startActivityAsync('android.intent.action.VIEW', {
+            data: contentUri,
+            flags: 1,
+            type: 'application/vnd.android.package-archive'
+          });
+          setUpdateStatus('Check for Updates');
+        } else {
+          setUpdateStatus('Error: No APK found');
+          setTimeout(() => setUpdateStatus('Check for Updates'), 3000);
+        }
+      } else {
+        setUpdateStatus('App is up to date');
+        setTimeout(() => setUpdateStatus('Check for Updates'), 3000);
+      }
+    } catch (e) {
+      console.error(e);
+      setUpdateStatus('Update Check Failed');
+      setTimeout(() => setUpdateStatus('Check for Updates'), 3000);
+    }
+  };
 
   // Phase 2: Silent persistence loading on boot
   useEffect(() => {
@@ -262,6 +309,20 @@ export default function App() {
                 </View>
               ))
             )}
+          </View>
+
+          {/* System Settings */}
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>System Settings</Text>
+            <Text style={{ color: '#6B7280', fontSize: 12, marginBottom: 12 }}>
+              Current Version: {Constants.expoConfig?.version || '1.0.0'}
+            </Text>
+            <TouchableOpacity 
+              style={[styles.btn, { backgroundColor: '#374151', padding: 12 }]}
+              onPress={checkForUpdates}
+            >
+              <Text style={styles.btnText}>{updateStatus}</Text>
+            </TouchableOpacity>
           </View>
 
           <TouchableOpacity style={styles.logoutBtn} onPress={handleDisconnect}>
