@@ -47,10 +47,14 @@ jobs:
         working-directory: ./android
         run: ./gradlew assembleRelease
 
+      - name: Rename APK
+        working-directory: ./android/app/build/outputs/apk/release
+        run: mv app-release.apk partner-mobile-v1.0.${{ github.run_number }}.apk
+
       - name: Create Release & Upload Asset
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v1.0.${{ github.run_number }}
           name: Release v1.0.${{ github.run_number }}
-          files: android/app/build/outputs/apk/release/app-release.apk
+          files: android/app/build/outputs/apk/release/*.apk
           generate_release_notes: true
