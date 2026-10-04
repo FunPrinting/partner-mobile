@@ -95,7 +95,7 @@ export default function App() {
 
   const establishConnection = (pid, jwt) => {
     // Phase 3: Real WebSocket Tunnel Connection
-    const newSocket = io('http://localhost:3001', {
+    const newSocket = io('https://funprinting-wss.onrender.com', {
       auth: { token: jwt },
       query: { partnerId: pid }
     });
@@ -105,7 +105,7 @@ export default function App() {
       setSocket(newSocket);
       
       // Phase 5: Fetch Financial Dashboard Data
-      fetch('http://localhost:3000/api/partner/financials', {
+      fetch('https://www.funprinting.store/api/partner/financials', {
         headers: { 'Authorization': `Bearer ${jwt}` }
       })
       .then(res => res.json())
