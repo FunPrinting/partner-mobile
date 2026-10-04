@@ -2,6 +2,7 @@
   "expo": {
     "name": "partner-mobile",
     "slug": "partner-mobile",
+    "scheme": "funprintingpartner",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -21,7 +22,8 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-secure-store"
+      "expo-secure-store",
+      "expo-web-browser"
     ]
   }
 }

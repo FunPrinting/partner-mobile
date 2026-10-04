@@ -3,6 +3,8 @@ import { StyleSheet, Text, View, TextInput, TouchableOpacity, SafeAreaView, Stat
 import io from 'socket.io-client';
 import * as Print from 'expo-print';
 import * as SecureStore from 'expo-secure-store';
+import * as WebBrowser from 'expo-web-browser';
+import * as Linking from 'expo-linking';
 
 export default function App() {
   const [partnerId, setPartnerId] = useState('');
@@ -110,18 +112,31 @@ export default function App() {
     });
   };
 
-  const handleConnect = async () => {
-    if (partnerId.length > 5 && token) {
-      // Save credentials for next boot
-      try {
-        await SecureStore.setItemAsync('partnerId', partnerId);
-        await SecureStore.setItemAsync('token', token);
-      } catch (e) {
-        console.error('Failed to save session:', e);
+  const handleGoogleAuth = async () => {
+    try {
+      const redirectUrl = Linking.createURL('callback');
+      const authUrl = `https://www.funprinting.store/partner/desktop-auth?callback=${encodeURIComponent(redirectUrl)}`;
+      
+      const result = await WebBrowser.openAuthSessionAsync(authUrl, redirectUrl);
+      
+      if (result.type === 'success' && result.url) {
+        const parsed = Linking.parse(result.url);
+        const pid = parsed.queryParams?.partnerId;
+        const jwt = parsed.queryParams?.token;
+        
+        if (pid && jwt) {
+          setPartnerId(pid);
+          setToken(jwt);
+          await SecureStore.setItemAsync('partnerId', pid);
+          await SecureStore.setItemAsync('token', jwt);
+          establishConnection(pid, jwt);
+        } else {
+          Alert.alert("Auth Error", "Failed to retrieve token from login.");
+        }
       }
-      establishConnection(partnerId, token);
-    } else {
-      Alert.alert("Invalid Input", "Please enter a valid Partner ID and JWT Token.");
+    } catch (e) {
+      console.error(e);
+      Alert.alert("Auth Error", "Something went wrong during login.");
     }
   };
 
@@ -269,32 +284,8 @@ export default function App() {
         <Text style={styles.loginTitle}>FunPrinting Partner</Text>
         <Text style={styles.loginSubtitle}>Connect your Android device to receive printing jobs securely.</Text>
 
-        <View style={styles.formGroup}>
-          <Text style={styles.label}>Partner ID</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="e.g. 64a1b2..."
-            placeholderTextColor="#6B7280"
-            value={partnerId}
-            onChangeText={setPartnerId}
-            autoCapitalize="none"
-          />
-        </View>
-
-        <View style={styles.formGroup}>
-          <Text style={styles.label}>Access Token (JWT)</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Paste your token here"
-            placeholderTextColor="#6B7280"
-            value={token}
-            onChangeText={setToken}
-            secureTextEntry
-          />
-        </View>
-
-        <TouchableOpacity style={styles.btn} onPress={handleConnect}>
-          <Text style={styles.btnText}>Connect Device</Text>
+        <TouchableOpacity style={styles.btn} onPress={handleGoogleAuth}>
+          <Text style={styles.btnText}>Sign In with Google</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
