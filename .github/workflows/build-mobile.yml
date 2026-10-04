@@ -8,8 +8,7 @@ on:
 
 jobs:
   build:
-    runs-on:
-  workflow_dispatch: ubuntu-latest
+    runs-on: ubuntu-latest
 
     defaults:
       run:
@@ -22,16 +21,13 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version:
-  workflow_dispatch: 20
+          node-version: 20
 
       - name: Setup Expo
         uses: expo/expo-github-action@v8
         with:
-          expo-version:
-  workflow_dispatch: latest
-          eas-version:
-  workflow_dispatch: latest
+          expo-version: latest
+          eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }} # Must be configured in GitHub Repo Secrets
 
       - name: Install Dependencies
