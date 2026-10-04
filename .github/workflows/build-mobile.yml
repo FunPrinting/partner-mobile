@@ -3,8 +3,8 @@ name: Build Mobile Partner App (Expo APK)
 on:
   workflow_dispatch:
   push:
-    tags:
-      - 'v*' # Trigger only when a new release tag like 'v1.0.0' is pushed
+    branches:
+      - main
 
 jobs:
   build:
