@@ -49,7 +49,7 @@ jobs:
 
       - name: Rename APK
         working-directory: ./android/app/build/outputs/apk/release
-        run: mv app-release.apk partner-mobile-v1.0.${{ github.run_number }}.apk
+        run: mv app-release.apk FunPrintingPartner.apk
 
       - name: Create Release & Upload Asset
         uses: softprops/action-gh-release@v2
