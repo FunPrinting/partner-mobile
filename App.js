@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { StyleSheet, Text, View, TextInput, TouchableOpacity, SafeAreaView, StatusBar, ScrollView, Alert, ActivityIndicator } from 'react-native';
+import { StyleSheet, Text, View, TextInput, TouchableOpacity, SafeAreaView, StatusBar, ScrollView, Alert, ActivityIndicator, Image } from 'react-native';
 import io from 'socket.io-client';
 import * as Print from 'expo-print';
 import * as SecureStore from 'expo-secure-store';
@@ -169,9 +169,7 @@ export default function App() {
         
         {/* Header */}
         <View style={styles.header}>
-          <View style={styles.headerLogo}>
-            <Text style={styles.headerLogoText}>FP</Text>
-          </View>
+          <Image source={require('./assets/logo.jpg')} style={styles.headerLogoImage} />
           <Text style={styles.headerTitle}>Partner Mobile</Text>
           <View style={styles.statusBadge}>
             <View style={styles.statusDot} />
@@ -278,9 +276,7 @@ export default function App() {
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#111827" />
       <View style={styles.loginContainer}>
-        <View style={styles.loginLogo}>
-          <Text style={styles.loginLogoText}>FP</Text>
-        </View>
+        <Image source={require('./assets/logo.jpg')} style={styles.loginLogoImage} />
         <Text style={styles.loginTitle}>FunPrinting Partner</Text>
         <Text style={styles.loginSubtitle}>Connect your Android device to receive printing jobs securely.</Text>
 
@@ -302,19 +298,11 @@ const styles = StyleSheet.create({
     padding: 24,
     justifyContent: 'center',
   },
-  loginLogo: {
+  loginLogoImage: {
     width: 64,
     height: 64,
-    backgroundColor: '#4F46E5', // Indigo 600
     borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
     marginBottom: 24,
-  },
-  loginLogoText: {
-    color: '#FFF',
-    fontSize: 28,
-    fontWeight: 'bold',
   },
   loginTitle: {
     fontSize: 28,
@@ -366,18 +354,11 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#374151',
   },
-  headerLogo: {
+  headerLogoImage: {
     width: 32,
     height: 32,
-    backgroundColor: '#4F46E5',
     borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
     marginRight: 12,
-  },
-  headerLogoText: {
-    color: '#FFF',
-    fontWeight: 'bold',
   },
   headerTitle: {
     color: '#FFF',
