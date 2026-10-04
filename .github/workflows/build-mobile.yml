@@ -1,0 +1,39 @@
+name: Build Mobile Partner App (Expo APK)
+
+on:
+  push:
+    tags:
+      - 'v*' # Trigger only when a new release tag like 'v1.0.0' is pushed
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: partner-mobile
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup Expo
+        uses: expo/expo-github-action@v8
+        with:
+          expo-version: latest
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }} # Must be configured in GitHub Repo Secrets
+
+      - name: Install Dependencies
+        run: npm ci || npm install
+
+      - name: Build Android APK
+        run: eas build --platform android --profile preview --non-interactive
+
+      # EAS automatically uploads the build to the Expo servers. 
+      # The web dashboard will fetch the URL via the EAS API.
