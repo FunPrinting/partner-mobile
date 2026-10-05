@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { StyleSheet, Text, View, TextInput, TouchableOpacity, SafeAreaView, StatusBar, ScrollView, Alert, ActivityIndicator, Image } from 'react-native';
+import { StyleSheet, Text, View, TextInput, TouchableOpacity, SafeAreaView, StatusBar, ScrollView, Alert, ActivityIndicator, Image, Switch } from 'react-native';
 import io from 'socket.io-client';
 import * as Print from 'expo-print';
 import * as SecureStore from 'expo-secure-store';
@@ -35,6 +35,36 @@ export default function App() {
   const [shopLocation, setShopLocation] = useState({ latitude: 28.6139, longitude: 77.2090 });
   const [searchQuery, setSearchQuery] = useState('');
   const [isLocating, setIsLocating] = useState(false);
+  const [shopPricing, setShopPricing] = useState({ bw: '2', color: '10', binding: '40' });
+  const [isOnline, setIsOnline] = useState(false);
+  const [isLoadingProfile, setIsLoadingProfile] = useState(false);
+
+  const loadProfileAndShow = async () => {
+    setIsLoadingProfile(true);
+    try {
+      const res = await fetch('https://www.funprinting.store/api/partner/profile', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (data.success && data.partner) {
+        if (data.partner.location && data.partner.location.coordinates) {
+          setShopLocation({ latitude: data.partner.location.coordinates[1], longitude: data.partner.location.coordinates[0] });
+        }
+        if (data.partner.pricing) {
+          setShopPricing({ bw: data.partner.pricing.perPageBW.toString(), color: data.partner.pricing.perPageColor.toString(), binding: data.partner.pricing.binding.toString() });
+        }
+        if (data.partner.isOnline !== undefined) {
+          setIsOnline(data.partner.isOnline);
+        }
+      }
+      setShowProfileModal(true);
+    } catch (e) {
+      Alert.alert('Error', 'Failed to load profile.');
+      setShowProfileModal(true); // show anyway
+    } finally {
+      setIsLoadingProfile(false);
+    }
+  };
 
   const checkForUpdates = async () => {
     try {
@@ -335,9 +365,10 @@ export default function App() {
             
             <TouchableOpacity 
               style={[styles.btn, { backgroundColor: '#4F46E5', padding: 12, marginTop: 12 }]}
-              onPress={() => setShowProfileModal(true)}
+              onPress={loadProfileAndShow}
+              disabled={isLoadingProfile}
             >
-              <Text style={styles.btnText}>Manage Shop Location</Text>
+              <Text style={styles.btnText}>{isLoadingProfile ? 'Loading...' : 'Manage Shop Profile'}</Text>
             </TouchableOpacity>
           </View>
 
@@ -349,15 +380,50 @@ export default function App() {
         {/* Shop Location Map Modal */}
         <Modal visible={showProfileModal} animationType="slide" transparent={true}>
           <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'flex-end' }}>
-            <View style={{ backgroundColor: '#1F2937', height: '85%', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20 }}>
+            <View style={{ backgroundColor: '#1F2937', height: '95%', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20 }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-                <Text style={{ color: 'white', fontSize: 20, fontWeight: 'bold' }}>Update Shop Location</Text>
+                <Text style={{ color: 'white', fontSize: 20, fontWeight: 'bold' }}>Update Shop Profile</Text>
                 <TouchableOpacity onPress={() => setShowProfileModal(false)}>
                   <Text style={{ color: '#9CA3AF', fontSize: 16 }}>Close</Text>
                 </TouchableOpacity>
               </View>
 
-              <View style={{ flexDirection: 'row', gap: 10, marginBottom: 16 }}>
+              <ScrollView style={{ flex: 1, marginBottom: 16 }} showsVerticalScrollIndicator={false}>
+                
+                {/* Status Toggle */}
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, backgroundColor: '#374151', padding: 16, borderRadius: 12 }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: 'white', fontSize: 16, fontWeight: 'bold' }}>Taking Orders</Text>
+                    <Text style={{ color: '#9CA3AF', fontSize: 12, marginTop: 4 }}>Turn on to appear on the customer map</Text>
+                  </View>
+                  <Switch
+                    trackColor={{ false: '#4B5563', true: '#10B981' }}
+                    thumbColor={isOnline ? '#FFFFFF' : '#D1D5DB'}
+                    onValueChange={setIsOnline}
+                    value={isOnline}
+                  />
+                </View>
+
+                {/* Pricing Fields */}
+                <Text style={{ color: '#D1D5DB', fontSize: 14, fontWeight: 'bold', marginBottom: 8 }}>Service Pricing (₹)</Text>
+                <View style={{ flexDirection: 'row', gap: 10, marginBottom: 20 }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: '#9CA3AF', fontSize: 12, marginBottom: 4 }}>B&W (Per Page)</Text>
+                    <TextInput style={[styles.input, { padding: 10, fontSize: 14 }]} value={shopPricing.bw} onChangeText={(val) => setShopPricing({...shopPricing, bw: val})} keyboardType="numeric" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: '#9CA3AF', fontSize: 12, marginBottom: 4 }}>Color (Per Page)</Text>
+                    <TextInput style={[styles.input, { padding: 10, fontSize: 14 }]} value={shopPricing.color} onChangeText={(val) => setShopPricing({...shopPricing, color: val})} keyboardType="numeric" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: '#9CA3AF', fontSize: 12, marginBottom: 4 }}>Binding (Fixed)</Text>
+                    <TextInput style={[styles.input, { padding: 10, fontSize: 14 }]} value={shopPricing.binding} onChangeText={(val) => setShopPricing({...shopPricing, binding: val})} keyboardType="numeric" />
+                  </View>
+                </View>
+
+                {/* Map Search & GPS */}
+                <Text style={{ color: '#D1D5DB', fontSize: 14, fontWeight: 'bold', marginBottom: 8 }}>Shop Location</Text>
+                <View style={{ flexDirection: 'row', gap: 10, marginBottom: 16 }}>
                 <TextInput
                   style={[styles.input, { flex: 1, padding: 12, fontSize: 14 }]}
                   placeholder="Search city/address..."
@@ -472,7 +538,13 @@ export default function App() {
                         location: {
                            type: 'Point',
                            coordinates: [shopLocation.longitude, shopLocation.latitude]
-                        }
+                        },
+                        pricing: {
+                           perPageBW: parseFloat(shopPricing.bw) || 2,
+                           perPageColor: parseFloat(shopPricing.color) || 10,
+                           binding: parseFloat(shopPricing.binding) || 40
+                        },
+                        isOnline: isOnline
                       })
                     });
                     
@@ -489,6 +561,7 @@ export default function App() {
               >
                 <Text style={styles.btnText}>Save Exact Location</Text>
               </TouchableOpacity>
+              </ScrollView>
             </View>
           </View>
         </Modal>
