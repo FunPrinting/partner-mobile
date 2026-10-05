@@ -638,7 +638,15 @@ export default function App() {
                 {isLoadingOrders ? (
                   <ActivityIndicator size="large" color="#4F46E5" style={{ marginTop: 50 }} />
                 ) : ordersList.length === 0 ? (
-                  <Text style={{ color: '#6B7280', textAlign: 'center', marginTop: 50 }}>No orders found.</Text>
+                  <View style={{ alignItems: 'center', justifyContent: 'center', marginTop: 40, paddingHorizontal: 20 }}>
+                    <View style={{ backgroundColor: '#EEF2FF', padding: 16, borderRadius: 50, marginBottom: 16 }}>
+                      <Text style={{ fontSize: 32 }}>📭</Text>
+                    </View>
+                    <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#111827', marginBottom: 8 }}>No active orders yet</Text>
+                    <Text style={{ fontSize: 14, color: '#6B7280', textAlign: 'center', lineHeight: 20 }}>
+                      When customers place print jobs in your area, they will appear here. Keep your shop online to start receiving orders.
+                    </Text>
+                  </View>
                 ) : (
                   ordersList.map(order => (
                     <View key={order.orderId} style={{ backgroundColor: '#374151', padding: 16, borderRadius: 12, marginBottom: 12 }}>
