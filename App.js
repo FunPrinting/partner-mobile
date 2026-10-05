@@ -111,7 +111,13 @@ export default function App() {
   const checkForUpdates = async () => {
     try {
       setUpdateStatus('Checking...');
-      const response = await fetch('https://api.github.com/repos/FunPrinting/partner-mobile/releases/latest');
+      const response = await fetch('https://api.github.com/repos/FunPrinting/partner-mobile/releases/latest', {
+        headers: {
+          'User-Agent': 'FunPrinting-Partner-App',
+          'Accept': 'application/vnd.github.v3+json'
+        }
+      });
+      if (!response.ok) throw new Error(`GitHub API returned ${response.status}`);
       const data = await response.json();
       const latestVersion = data.tag_name;
       
