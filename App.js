@@ -8,6 +8,9 @@ import * as Linking from 'expo-linking';
 import * as FileSystem from 'expo-file-system';
 import * as IntentLauncher from 'expo-intent-launcher';
 import Constants from 'expo-constants';
+import * as Location from 'expo-location';
+import MapView, { Marker } from 'react-native-maps';
+import { Modal } from 'react-native';
 
 export default function App() {
   const [partnerId, setPartnerId] = useState('');
@@ -26,6 +29,12 @@ export default function App() {
 
   // Phase 7: Update Checking
   const [updateStatus, setUpdateStatus] = useState('Check for Updates');
+
+  // Shop Profile Management
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [shopLocation, setShopLocation] = useState({ latitude: 28.6139, longitude: 77.2090 });
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isLocating, setIsLocating] = useState(false);
 
   const checkForUpdates = async () => {
     try {
@@ -323,12 +332,167 @@ export default function App() {
             >
               <Text style={styles.btnText}>{updateStatus}</Text>
             </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={[styles.btn, { backgroundColor: '#4F46E5', padding: 12, marginTop: 12 }]}
+              onPress={() => setShowProfileModal(true)}
+            >
+              <Text style={styles.btnText}>Manage Shop Location</Text>
+            </TouchableOpacity>
           </View>
 
           <TouchableOpacity style={styles.logoutBtn} onPress={handleDisconnect}>
             <Text style={styles.logoutBtnText}>Disconnect Mobile Session</Text>
           </TouchableOpacity>
         </ScrollView>
+
+        {/* Shop Location Map Modal */}
+        <Modal visible={showProfileModal} animationType="slide" transparent={true}>
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'flex-end' }}>
+            <View style={{ backgroundColor: '#1F2937', height: '85%', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                <Text style={{ color: 'white', fontSize: 20, fontWeight: 'bold' }}>Update Shop Location</Text>
+                <TouchableOpacity onPress={() => setShowProfileModal(false)}>
+                  <Text style={{ color: '#9CA3AF', fontSize: 16 }}>Close</Text>
+                </TouchableOpacity>
+              </View>
+
+              <View style={{ flexDirection: 'row', gap: 10, marginBottom: 16 }}>
+                <TextInput
+                  style={[styles.input, { flex: 1, padding: 12, fontSize: 14 }]}
+                  placeholder="Search city/address..."
+                  placeholderTextColor="#9CA3AF"
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  onSubmitEditing={async () => {
+                    if (!searchQuery) return;
+                    try {
+                      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}`);
+                      const data = await res.json();
+                      if (data && data.length > 0) {
+                        setShopLocation({ latitude: parseFloat(data[0].lat), longitude: parseFloat(data[0].lon) });
+                      } else {
+                        Alert.alert('Not Found', 'Location not found.');
+                      }
+                    } catch (e) {
+                      Alert.alert('Error', 'Search failed.');
+                    }
+                  }}
+                />
+                <TouchableOpacity 
+                  style={[styles.btn, { marginTop: 0, paddingHorizontal: 16, justifyContent: 'center' }]}
+                  onPress={async () => {
+                    if (!searchQuery) return;
+                    try {
+                      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}`);
+                      const data = await res.json();
+                      if (data && data.length > 0) {
+                        setShopLocation({ latitude: parseFloat(data[0].lat), longitude: parseFloat(data[0].lon) });
+                      } else {
+                        Alert.alert('Not Found', 'Location not found.');
+                      }
+                    } catch (e) {
+                      Alert.alert('Error', 'Search failed.');
+                    }
+                  }}
+                >
+                  <Text style={styles.btnText}>Search</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={[styles.btn, { marginTop: 0, paddingHorizontal: 16, justifyContent: 'center', backgroundColor: '#10B981' }]}
+                  onPress={async () => {
+                    setIsLocating(true);
+                    try {
+                      let { status } = await Location.requestForegroundPermissionsAsync();
+                      
+                      const useIP = async () => {
+                        const res = await fetch('https://ipwho.is/');
+                        const data = await res.json();
+                        if (data && data.success) {
+                           setShopLocation({ latitude: data.latitude, longitude: data.longitude });
+                        }
+                      };
+
+                      if (status !== 'granted') {
+                        Alert.alert('Permission Denied', 'Falling back to IP Location.');
+                        await useIP();
+                        setIsLocating(false);
+                        return;
+                      }
+                      
+                      let location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+                      setShopLocation({ latitude: location.coords.latitude, longitude: location.coords.longitude });
+                    } catch (e) {
+                      console.log('GPS error, falling back to IP');
+                      try {
+                        const res = await fetch('https://ipwho.is/');
+                        const data = await res.json();
+                        if (data && data.success) setShopLocation({ latitude: data.latitude, longitude: data.longitude });
+                      } catch(err) {}
+                    } finally {
+                      setIsLocating(false);
+                    }
+                  }}
+                >
+                  <Text style={styles.btnText}>{isLocating ? '...' : 'GPS'}</Text>
+                </TouchableOpacity>
+              </View>
+
+              <View style={{ height: 350, borderRadius: 12, overflow: 'hidden', marginBottom: 20 }}>
+                <MapView 
+                  style={{ flex: 1 }}
+                  region={{
+                    latitude: shopLocation.latitude,
+                    longitude: shopLocation.longitude,
+                    latitudeDelta: 0.05,
+                    longitudeDelta: 0.05,
+                  }}
+                  onPress={(e) => setShopLocation(e.nativeEvent.coordinate)}
+                >
+                  <Marker coordinate={shopLocation} />
+                </MapView>
+              </View>
+              
+              <Text style={{ color: '#9CA3AF', fontSize: 12, textAlign: 'center', marginBottom: 20 }}>
+                Tap anywhere on the map to place the marker exactly on your shop.
+              </Text>
+
+              <TouchableOpacity 
+                style={[styles.btn, { backgroundColor: '#10B981' }]}
+                onPress={async () => {
+                  try {
+                    // Update location on backend
+                    const res = await fetch(`https://www.funprinting.store/api/partner/profile`, {
+                      method: 'PUT',
+                      headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                      },
+                      body: JSON.stringify({
+                        location: {
+                           type: 'Point',
+                           coordinates: [shopLocation.longitude, shopLocation.latitude]
+                        }
+                      })
+                    });
+                    
+                    if (res.ok) {
+                      Alert.alert('Success', 'Shop location updated successfully!');
+                      setShowProfileModal(false);
+                    } else {
+                      Alert.alert('Error', 'Failed to update location.');
+                    }
+                  } catch (e) {
+                    Alert.alert('Error', 'Network error.');
+                  }
+                }}
+              >
+                <Text style={styles.btnText}>Save Exact Location</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+
       </SafeAreaView>
     );
   }
