@@ -39,6 +39,48 @@ export default function App() {
   const [isOnline, setIsOnline] = useState(false);
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
 
+  const [showOrdersModal, setShowOrdersModal] = useState(false);
+  const [ordersList, setOrdersList] = useState([]);
+  const [isLoadingOrders, setIsLoadingOrders] = useState(false);
+
+  const loadOrdersAndShow = async () => {
+    setIsLoadingOrders(true);
+    setShowOrdersModal(true);
+    try {
+      const res = await fetch('https://www.funprinting.store/api/partner/orders', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (data.success) {
+        setOrdersList(data.orders);
+      }
+    } catch (e) {
+      Alert.alert('Error', 'Failed to load orders.');
+    } finally {
+      setIsLoadingOrders(false);
+    }
+  };
+
+  const updateOrderStatus = async (orderId, newStatus) => {
+    try {
+      const res = await fetch(`https://www.funprinting.store/api/partner/orders/${orderId}`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ status: newStatus })
+      });
+      if (res.ok) {
+        loadOrdersAndShow(); // refresh
+      } else {
+        Alert.alert('Error', 'Failed to update order status');
+      }
+    } catch (e) {
+      Alert.alert('Error', 'Network error');
+    }
+  };
+
   const loadProfileAndShow = async () => {
     setIsLoadingProfile(true);
     try {
@@ -370,6 +412,14 @@ export default function App() {
             >
               <Text style={styles.btnText}>{isLoadingProfile ? 'Loading...' : 'Manage Shop Profile'}</Text>
             </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={[styles.btn, { backgroundColor: '#10B981', padding: 12, marginTop: 12 }]}
+              onPress={loadOrdersAndShow}
+              disabled={isLoadingOrders}
+            >
+              <Text style={styles.btnText}>{isLoadingOrders ? 'Loading...' : 'Manage Orders'}</Text>
+            </TouchableOpacity>
           </View>
 
           <TouchableOpacity style={styles.logoutBtn} onPress={handleDisconnect}>
@@ -561,6 +611,68 @@ export default function App() {
               >
                 <Text style={styles.btnText}>Save Exact Location</Text>
               </TouchableOpacity>
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Orders Modal */}
+        <Modal visible={showOrdersModal} animationType="slide" transparent={true}>
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'flex-end' }}>
+            <View style={{ backgroundColor: '#1F2937', height: '90%', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                <Text style={{ color: 'white', fontSize: 20, fontWeight: 'bold' }}>Order Management</Text>
+                <TouchableOpacity onPress={() => setShowOrdersModal(false)}>
+                  <Text style={{ color: '#9CA3AF', fontSize: 16 }}>Close</Text>
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
+                {isLoadingOrders ? (
+                  <ActivityIndicator size="large" color="#4F46E5" style={{ marginTop: 50 }} />
+                ) : ordersList.length === 0 ? (
+                  <Text style={{ color: '#9CA3AF', textAlign: 'center', marginTop: 50 }}>No orders found.</Text>
+                ) : (
+                  ordersList.map(order => (
+                    <View key={order.orderId} style={{ backgroundColor: '#374151', padding: 16, borderRadius: 12, marginBottom: 12 }}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
+                        <Text style={{ color: 'white', fontWeight: 'bold' }}>Order #{order.orderId.substring(0,8)}</Text>
+                        <Text style={{ color: '#10B981', fontWeight: 'bold' }}>₹{(order.amount * 0.9).toFixed(2)}</Text>
+                      </View>
+                      <Text style={{ color: '#D1D5DB', fontSize: 14, marginBottom: 4 }}>{order.originalFileName || 'Document'}</Text>
+                      <Text style={{ color: '#9CA3AF', fontSize: 12, marginBottom: 12 }}>{new Date(order.createdAt).toLocaleDateString()}</Text>
+                      
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Text style={{ 
+                          color: order.status === 'completed' ? '#10B981' : order.status === 'ready_for_pickup' ? '#F59E0B' : '#60A5FA', 
+                          fontWeight: 'bold', fontSize: 12 
+                        }}>
+                          {order.status.toUpperCase()}
+                        </Text>
+                        
+                        {order.status !== 'completed' && (
+                          <View style={{ flexDirection: 'row', gap: 8 }}>
+                            {order.status === 'pending' && (
+                              <TouchableOpacity onPress={() => updateOrderStatus(order.orderId, 'printing')} style={{ backgroundColor: '#3B82F6', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6 }}>
+                                <Text style={{ color: 'white', fontSize: 12, fontWeight: 'bold' }}>Start Printing</Text>
+                              </TouchableOpacity>
+                            )}
+                            {order.status === 'printing' && (
+                              <TouchableOpacity onPress={() => updateOrderStatus(order.orderId, 'ready_for_pickup')} style={{ backgroundColor: '#F59E0B', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6 }}>
+                                <Text style={{ color: 'white', fontSize: 12, fontWeight: 'bold' }}>Mark Ready</Text>
+                              </TouchableOpacity>
+                            )}
+                            {order.status === 'ready_for_pickup' && (
+                              <TouchableOpacity onPress={() => updateOrderStatus(order.orderId, 'completed')} style={{ backgroundColor: '#10B981', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6 }}>
+                                <Text style={{ color: 'white', fontSize: 12, fontWeight: 'bold' }}>Complete</Text>
+                              </TouchableOpacity>
+                            )}
+                          </View>
+                        )}
+                      </View>
+                    </View>
+                  ))
+                )}
               </ScrollView>
             </View>
           </View>
