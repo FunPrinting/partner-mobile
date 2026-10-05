@@ -37,6 +37,8 @@ export default function App() {
   const [isLocating, setIsLocating] = useState(false);
   const [shopPricing, setShopPricing] = useState({ bw: '2', color: '10', binding: '40' });
   const [isOnline, setIsOnline] = useState(false);
+  const [shopPhones, setShopPhones] = useState([]);
+  const [deliveryPoints, setDeliveryPoints] = useState([]);
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
 
   const [showOrdersModal, setShowOrdersModal] = useState(false);
@@ -97,6 +99,12 @@ export default function App() {
         }
         if (data.partner.isOnline !== undefined) {
           setIsOnline(data.partner.isOnline);
+        }
+        if (data.partner.phoneNumbers) {
+          setShopPhones(data.partner.phoneNumbers);
+        }
+        if (data.partner.deliveryPoints) {
+          setDeliveryPoints(data.partner.deliveryPoints);
         }
       }
       setShowProfileModal(true);
@@ -487,6 +495,38 @@ export default function App() {
                   </View>
                 </View>
 
+                {/* Shop Phone Numbers */}
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <Text style={{ color: '#4B5563', fontSize: 14, fontWeight: 'bold' }}>Shop Phone Numbers</Text>
+                  <TouchableOpacity onPress={() => setShopPhones([...shopPhones, ''])}>
+                    <Text style={{ color: '#3B82F6', fontSize: 12, fontWeight: 'bold' }}>+ Add Phone</Text>
+                  </TouchableOpacity>
+                </View>
+                <View style={{ marginBottom: 20 }}>
+                  {shopPhones.map((phone, idx) => (
+                    <View key={idx} style={{ flexDirection: 'row', gap: 10, marginBottom: 8, alignItems: 'center' }}>
+                      <TextInput 
+                        style={[styles.input, { flex: 1, padding: 10, fontSize: 14 }]} 
+                        value={phone} 
+                        onChangeText={(val) => {
+                          const newPhones = [...shopPhones];
+                          newPhones[idx] = val;
+                          setShopPhones(newPhones);
+                        }} 
+                        placeholder="e.g. +919876543210" 
+                      />
+                      <TouchableOpacity onPress={() => {
+                        const newPhones = shopPhones.filter((_, i) => i !== idx);
+                        setShopPhones(newPhones);
+                      }}>
+                        <Text style={{ color: '#EF4444', fontSize: 16, fontWeight: 'bold', paddingHorizontal: 4 }}>✕</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                  {shopPhones.length === 0 && <Text style={{ color: '#9CA3AF', fontSize: 12, fontStyle: 'italic' }}>No phone numbers added yet.</Text>}
+                  <Text style={{ color: '#9CA3AF', fontSize: 10, marginTop: 4 }}>These numbers will be visible to all customers ordering from your shop.</Text>
+                </View>
+
                 {/* Map Search & GPS */}
                 <Text style={{ color: '#4B5563', fontSize: 14, fontWeight: 'bold', marginBottom: 8 }}>Shop Location</Text>
                 <View style={{ flexDirection: 'row', gap: 10, marginBottom: 16 }}>
@@ -589,13 +629,97 @@ export default function App() {
                 Tap anywhere on the map to place the marker exactly on your shop.
               </Text>
 
+              {/* Delivery Points */}
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <Text style={{ color: '#4B5563', fontSize: 14, fontWeight: 'bold' }}>Delivery Points</Text>
+                <TouchableOpacity onPress={() => setDeliveryPoints([...deliveryPoints, { name: '', contactNumber: '', location: { coordinates: [shopLocation.longitude, shopLocation.latitude] } }])}>
+                  <Text style={{ color: '#3B82F6', fontSize: 12, fontWeight: 'bold' }}>+ Add Point</Text>
+                </TouchableOpacity>
+              </View>
+              <View style={{ marginBottom: 20 }}>
+                {deliveryPoints.map((dp, idx) => (
+                  <View key={idx} style={{ backgroundColor: '#F9FAFB', padding: 12, borderRadius: 8, marginBottom: 8, borderWidth: 1, borderColor: '#E5E7EB' }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                      <TextInput 
+                        style={[styles.input, { flex: 1, padding: 8, fontSize: 14, marginBottom: 0 }]} 
+                        value={dp.name} 
+                        onChangeText={(val) => {
+                          const newDps = [...deliveryPoints];
+                          newDps[idx].name = val;
+                          setDeliveryPoints(newDps);
+                        }} 
+                        placeholder="Point Name (e.g. Campus Gate)" 
+                      />
+                      <TouchableOpacity onPress={() => {
+                        const newDps = deliveryPoints.filter((_, i) => i !== idx);
+                        setDeliveryPoints(newDps);
+                      }} style={{ marginLeft: 10 }}>
+                        <Text style={{ color: '#EF4444', fontSize: 16, fontWeight: 'bold' }}>✕</Text>
+                      </TouchableOpacity>
+                    </View>
+                    <TextInput 
+                      style={[styles.input, { padding: 8, fontSize: 14, marginBottom: 8 }]} 
+                      value={dp.contactNumber || ''} 
+                      onChangeText={(val) => {
+                        const newDps = [...deliveryPoints];
+                        newDps[idx].contactNumber = val;
+                        setDeliveryPoints(newDps);
+                      }} 
+                      placeholder="Contact Number (Optional)" 
+                    />
+                    <View style={{ flexDirection: 'row', gap: 10 }}>
+                      <TextInput 
+                        style={[styles.input, { flex: 1, padding: 8, fontSize: 12, marginBottom: 0 }]} 
+                        value={dp.location?.coordinates ? dp.location.coordinates[1].toString() : ''} 
+                        onChangeText={(val) => {
+                          const newDps = [...deliveryPoints];
+                          if (!newDps[idx].location) newDps[idx].location = { coordinates: [0,0] };
+                          newDps[idx].location.coordinates[1] = parseFloat(val) || 0;
+                          setDeliveryPoints(newDps);
+                        }} 
+                        placeholder="Latitude" 
+                        keyboardType="numeric"
+                      />
+                      <TextInput 
+                        style={[styles.input, { flex: 1, padding: 8, fontSize: 12, marginBottom: 0 }]} 
+                        value={dp.location?.coordinates ? dp.location.coordinates[0].toString() : ''} 
+                        onChangeText={(val) => {
+                          const newDps = [...deliveryPoints];
+                          if (!newDps[idx].location) newDps[idx].location = { coordinates: [0,0] };
+                          newDps[idx].location.coordinates[0] = parseFloat(val) || 0;
+                          setDeliveryPoints(newDps);
+                        }} 
+                        placeholder="Longitude" 
+                        keyboardType="numeric"
+                      />
+                    </View>
+                  </View>
+                ))}
+                {deliveryPoints.length === 0 && <Text style={{ color: '#9CA3AF', fontSize: 12, fontStyle: 'italic' }}>No delivery points added.</Text>}
+              </View>
+
               <TouchableOpacity 
                 style={[styles.btn, { backgroundColor: '#10B981' }]}
                 onPress={async () => {
                   try {
+                    // Filter empty delivery points
+                    const dps = deliveryPoints.filter(dp => dp.name).map(dp => ({
+                      name: dp.name,
+                      contactNumber: dp.contactNumber || '',
+                      location: {
+                        type: 'Point',
+                        coordinates: [
+                          parseFloat(dp.location.coordinates[0]) || 0,
+                          parseFloat(dp.location.coordinates[1]) || 0
+                        ]
+                      }
+                    }));
+                    
+                    const filteredPhones = shopPhones.map(s => s.trim()).filter(Boolean);
+
                     // Update location on backend
                     const res = await fetch(`https://www.funprinting.store/api/partner/profile`, {
-                      method: 'PUT',
+                      method: 'POST',
                       headers: {
                         'Content-Type': 'application/json',
                         'Authorization': `Bearer ${token}`
@@ -610,7 +734,9 @@ export default function App() {
                            perPageColor: parseFloat(shopPricing.color) || 10,
                            binding: parseFloat(shopPricing.binding) || 40
                         },
-                        isOnline: isOnline
+                        isOnline: isOnline,
+                        phoneNumbers: filteredPhones,
+                        deliveryPoints: dps
                       })
                     });
                     
