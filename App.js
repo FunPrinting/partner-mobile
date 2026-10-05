@@ -224,13 +224,22 @@ export default function App() {
       // Phase 6: Autonomous Mobile Print Server Mode
       try {
         console.log(`Phase 6: Emulating Direct IP Print to ${printerIpRef.current}:9100`);
-        // Note: In a true detached Expo app, we would use react-native-tcp-socket here
-        // to send raw bytes to Port 9100. Since this is standard Expo Go, we use
-        // expo-print as a fallback visualizer.
-        await Print.printAsync({
-          uri: job.documentUrl,
-          printerUrl: undefined, // Simulates direct connection
-        });
+        
+        const hasMultipleFiles = job.fileURLs && job.fileURLs.length > 0;
+        
+        if (hasMultipleFiles) {
+          for (let i = 0; i < job.fileURLs.length; i++) {
+             await Print.printAsync({
+               uri: job.fileURLs[i],
+               printerUrl: undefined,
+             });
+          }
+        } else {
+          await Print.printAsync({
+            uri: job.documentUrl,
+            printerUrl: undefined, // Simulates direct connection
+          });
+        }
         
         newSocket.emit('print_job_ack', { jobId: job.jobId, status: 'success' });
       } catch (error) {
