@@ -64,7 +64,7 @@ export default function App() {
   const updateOrderStatus = async (orderId, newStatus) => {
     try {
       const res = await fetch(`https://www.funprinting.store/api/partner/orders/${orderId}`, {
-        method: 'POST',
+        method: 'PATCH',
         headers: { 
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
@@ -158,6 +158,7 @@ export default function App() {
         if (storedPartnerId && storedToken) {
           setPartnerId(storedPartnerId);
           setToken(storedToken);
+          setIsConnected(true);
           // Auto-connect if we have a cached session
           establishConnection(storedPartnerId, storedToken);
         }
