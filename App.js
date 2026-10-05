@@ -282,10 +282,10 @@ export default function App() {
 
   if (isBooting) {
     return (
-      <View style={{ flex: 1, backgroundColor: '#111827', justifyContent: 'center', alignItems: 'center' }}>
+      <View style={{ flex: 1, backgroundColor: '#F9FAFB', justifyContent: 'center', alignItems: 'center' }}>
         <StatusBar barStyle="light-content" backgroundColor="#111827" />
         <ActivityIndicator size="large" color="#3B82F6" />
-        <Text style={{ color: 'white', marginTop: 16 }}>Loading Business Tools...</Text>
+        <Text style={{ color: '#111827', marginTop: 16 }}>Loading Business Tools...</Text>
       </View>
     );
   }
@@ -311,13 +311,13 @@ export default function App() {
             <Text style={styles.cardTitle}>Today's Earnings (90% Split)</Text>
             <Text style={styles.earningsText}>₹ {financials.todayEarnings.toLocaleString()}</Text>
             
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 16, borderTopWidth: 1, borderTopColor: '#374151', paddingTop: 16 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 16, borderTopWidth: 1, borderTopColor: '#E5E7EB', paddingTop: 16 }}>
               <View>
-                <Text style={{ color: '#9CA3AF', fontSize: 12 }}>All-Time Revenue</Text>
+                <Text style={{ color: '#6B7280', fontSize: 12 }}>All-Time Revenue</Text>
                 <Text style={{ color: '#F3F4F6', fontSize: 16, fontWeight: 'bold' }}>₹ {financials.totalEarnings.toLocaleString()}</Text>
               </View>
               <View>
-                <Text style={{ color: '#9CA3AF', fontSize: 12 }}>Total Orders</Text>
+                <Text style={{ color: '#6B7280', fontSize: 12 }}>Total Orders</Text>
                 <Text style={{ color: '#F3F4F6', fontSize: 16, fontWeight: 'bold' }}>{financials.completedOrdersCount}</Text>
               </View>
             </View>
@@ -429,12 +429,12 @@ export default function App() {
 
         {/* Shop Location Map Modal */}
         <Modal visible={showProfileModal} animationType="slide" transparent={true}>
-          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'flex-end' }}>
-            <View style={{ backgroundColor: '#1F2937', height: '95%', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20 }}>
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+            <View style={{ backgroundColor: '#FFFFFF', height: '95%', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20 }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-                <Text style={{ color: 'white', fontSize: 20, fontWeight: 'bold' }}>Update Shop Profile</Text>
+                <Text style={{ color: '#111827', fontSize: 20, fontWeight: 'bold' }}>Update Shop Profile</Text>
                 <TouchableOpacity onPress={() => setShowProfileModal(false)}>
-                  <Text style={{ color: '#9CA3AF', fontSize: 16 }}>Close</Text>
+                  <Text style={{ color: '#6B7280', fontSize: 16 }}>Close</Text>
                 </TouchableOpacity>
               </View>
 
@@ -443,8 +443,8 @@ export default function App() {
                 {/* Status Toggle */}
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, backgroundColor: '#374151', padding: 16, borderRadius: 12 }}>
                   <View style={{ flex: 1 }}>
-                    <Text style={{ color: 'white', fontSize: 16, fontWeight: 'bold' }}>Taking Orders</Text>
-                    <Text style={{ color: '#9CA3AF', fontSize: 12, marginTop: 4 }}>Turn on to appear on the customer map</Text>
+                    <Text style={{ color: '#111827', fontSize: 16, fontWeight: 'bold' }}>Taking Orders</Text>
+                    <Text style={{ color: '#6B7280', fontSize: 12, marginTop: 4 }}>Turn on to appear on the customer map</Text>
                   </View>
                   <Switch
                     trackColor={{ false: '#4B5563', true: '#10B981' }}
@@ -455,29 +455,29 @@ export default function App() {
                 </View>
 
                 {/* Pricing Fields */}
-                <Text style={{ color: '#D1D5DB', fontSize: 14, fontWeight: 'bold', marginBottom: 8 }}>Service Pricing (₹)</Text>
+                <Text style={{ color: '#4B5563', fontSize: 14, fontWeight: 'bold', marginBottom: 8 }}>Service Pricing (₹)</Text>
                 <View style={{ flexDirection: 'row', gap: 10, marginBottom: 20 }}>
                   <View style={{ flex: 1 }}>
-                    <Text style={{ color: '#9CA3AF', fontSize: 12, marginBottom: 4 }}>B&W (Per Page)</Text>
+                    <Text style={{ color: '#6B7280', fontSize: 12, marginBottom: 4 }}>B&W (Per Page)</Text>
                     <TextInput style={[styles.input, { padding: 10, fontSize: 14 }]} value={shopPricing.bw} onChangeText={(val) => setShopPricing({...shopPricing, bw: val})} keyboardType="numeric" />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={{ color: '#9CA3AF', fontSize: 12, marginBottom: 4 }}>Color (Per Page)</Text>
+                    <Text style={{ color: '#6B7280', fontSize: 12, marginBottom: 4 }}>Color (Per Page)</Text>
                     <TextInput style={[styles.input, { padding: 10, fontSize: 14 }]} value={shopPricing.color} onChangeText={(val) => setShopPricing({...shopPricing, color: val})} keyboardType="numeric" />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={{ color: '#9CA3AF', fontSize: 12, marginBottom: 4 }}>Binding (Fixed)</Text>
+                    <Text style={{ color: '#6B7280', fontSize: 12, marginBottom: 4 }}>Binding (Fixed)</Text>
                     <TextInput style={[styles.input, { padding: 10, fontSize: 14 }]} value={shopPricing.binding} onChangeText={(val) => setShopPricing({...shopPricing, binding: val})} keyboardType="numeric" />
                   </View>
                 </View>
 
                 {/* Map Search & GPS */}
-                <Text style={{ color: '#D1D5DB', fontSize: 14, fontWeight: 'bold', marginBottom: 8 }}>Shop Location</Text>
+                <Text style={{ color: '#4B5563', fontSize: 14, fontWeight: 'bold', marginBottom: 8 }}>Shop Location</Text>
                 <View style={{ flexDirection: 'row', gap: 10, marginBottom: 16 }}>
                 <TextInput
                   style={[styles.input, { flex: 1, padding: 12, fontSize: 14 }]}
                   placeholder="Search city/address..."
-                  placeholderTextColor="#9CA3AF"
+                  placeholderTextColor="#6B7280"
                   value={searchQuery}
                   onChangeText={setSearchQuery}
                   onSubmitEditing={async () => {
@@ -569,7 +569,7 @@ export default function App() {
                 </MapView>
               </View>
               
-              <Text style={{ color: '#9CA3AF', fontSize: 12, textAlign: 'center', marginBottom: 20 }}>
+              <Text style={{ color: '#6B7280', fontSize: 12, textAlign: 'center', marginBottom: 20 }}>
                 Tap anywhere on the map to place the marker exactly on your shop.
               </Text>
 
@@ -618,12 +618,12 @@ export default function App() {
 
         {/* Orders Modal */}
         <Modal visible={showOrdersModal} animationType="slide" transparent={true}>
-          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'flex-end' }}>
-            <View style={{ backgroundColor: '#1F2937', height: '90%', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20 }}>
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+            <View style={{ backgroundColor: '#FFFFFF', height: '90%', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20 }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-                <Text style={{ color: 'white', fontSize: 20, fontWeight: 'bold' }}>Order Management</Text>
+                <Text style={{ color: '#111827', fontSize: 20, fontWeight: 'bold' }}>Order Management</Text>
                 <TouchableOpacity onPress={() => setShowOrdersModal(false)}>
-                  <Text style={{ color: '#9CA3AF', fontSize: 16 }}>Close</Text>
+                  <Text style={{ color: '#6B7280', fontSize: 16 }}>Close</Text>
                 </TouchableOpacity>
               </View>
 
@@ -631,16 +631,16 @@ export default function App() {
                 {isLoadingOrders ? (
                   <ActivityIndicator size="large" color="#4F46E5" style={{ marginTop: 50 }} />
                 ) : ordersList.length === 0 ? (
-                  <Text style={{ color: '#9CA3AF', textAlign: 'center', marginTop: 50 }}>No orders found.</Text>
+                  <Text style={{ color: '#6B7280', textAlign: 'center', marginTop: 50 }}>No orders found.</Text>
                 ) : (
                   ordersList.map(order => (
                     <View key={order.orderId} style={{ backgroundColor: '#374151', padding: 16, borderRadius: 12, marginBottom: 12 }}>
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
-                        <Text style={{ color: 'white', fontWeight: 'bold' }}>Order #{order.orderId.substring(0,8)}</Text>
+                        <Text style={{ color: '#111827', fontWeight: 'bold' }}>Order #{order.orderId.substring(0,8)}</Text>
                         <Text style={{ color: '#10B981', fontWeight: 'bold' }}>₹{(order.amount * 0.9).toFixed(2)}</Text>
                       </View>
-                      <Text style={{ color: '#D1D5DB', fontSize: 14, marginBottom: 4 }}>{order.originalFileName || 'Document'}</Text>
-                      <Text style={{ color: '#9CA3AF', fontSize: 12, marginBottom: 12 }}>{new Date(order.createdAt).toLocaleDateString()}</Text>
+                      <Text style={{ color: '#4B5563', fontSize: 14, marginBottom: 4 }}>{order.originalFileName || 'Document'}</Text>
+                      <Text style={{ color: '#6B7280', fontSize: 12, marginBottom: 12 }}>{new Date(order.createdAt).toLocaleDateString()}</Text>
                       
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                         <Text style={{ 
@@ -701,7 +701,7 @@ export default function App() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#111827', // Gray 900
+    backgroundColor: '#F9FAFB', // Gray 900
   },
   loginContainer: {
     flex: 1,
@@ -717,12 +717,12 @@ const styles = StyleSheet.create({
   loginTitle: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: '#FFF',
+    color: '#111827',
     marginBottom: 8,
   },
   loginSubtitle: {
     fontSize: 16,
-    color: '#9CA3AF', // Gray 400
+    color: '#6B7280', // Gray 400
     marginBottom: 32,
     lineHeight: 24,
   },
@@ -730,18 +730,18 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   label: {
-    color: '#D1D5DB', // Gray 300
+    color: '#4B5563', // Gray 300
     fontSize: 14,
     fontWeight: '600',
     marginBottom: 8,
   },
   input: {
-    backgroundColor: '#1F2937', // Gray 800
+    backgroundColor: '#FFFFFF', // Gray 800
     borderWidth: 1,
-    borderColor: '#374151', // Gray 700
+    borderColor: '#E5E7EB', // Gray 700
     borderRadius: 12,
     padding: 16,
-    color: '#FFF',
+    color: '#111827',
     fontSize: 16,
   },
   btn: {
@@ -752,7 +752,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   btnText: {
-    color: '#FFF',
+    color: '#FFFFFF',
     fontSize: 16,
     fontWeight: 'bold',
   },
@@ -760,9 +760,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: 16,
-    backgroundColor: '#1F2937',
+    backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
-    borderBottomColor: '#374151',
+    borderBottomColor: '#E5E7EB',
   },
   headerLogoImage: {
     width: 32,
@@ -771,7 +771,7 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   headerTitle: {
-    color: '#FFF',
+    color: '#111827',
     fontSize: 18,
     fontWeight: 'bold',
     flex: 1,
@@ -803,21 +803,21 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   card: {
-    backgroundColor: '#1F2937',
+    backgroundColor: '#FFFFFF',
     borderRadius: 16,
     padding: 20,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#374151',
+    borderColor: '#E5E7EB',
   },
   cardTitle: {
-    color: '#9CA3AF',
+    color: '#6B7280',
     fontSize: 14,
     fontWeight: '600',
     marginBottom: 12,
   },
   earningsText: {
-    color: '#FFF',
+    color: '#111827',
     fontSize: 32,
     fontWeight: 'bold',
   },
@@ -825,10 +825,10 @@ const styles = StyleSheet.create({
     height: 120,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#111827',
+    backgroundColor: '#F9FAFB',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#374151',
+    borderColor: '#E5E7EB',
     borderStyle: 'dashed',
   },
   emptyQueueText: {
@@ -844,7 +844,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   jobId: {
-    color: '#FFF',
+    color: '#111827',
     fontWeight: 'bold',
   },
   jobStatus: {
@@ -860,7 +860,7 @@ const styles = StyleSheet.create({
     marginBottom: 32,
   },
   logoutBtnText: {
-    color: '#FFF',
+    color: '#FFFFFF',
     fontSize: 16,
     fontWeight: 'bold',
   }
