@@ -2,7 +2,8 @@ import { useFocusEffect } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { ActionSheetIOS, Alert, Platform, Pressable, Text, View } from 'react-native';
 import { Banner, Card, EmptyState, Pill, Screen } from '@/components/ui';
-import { NEXT_STATUSES, STATUS_LABEL } from '@/lib/jobLogic';
+import { HandoverCodeModal } from '@/components/HandoverCodeModal';
+import { canBookCourier, fulfilmentLabel, fulfilmentOf, nextStatuses, partnerShare, STATUS_LABEL } from '@/lib/jobLogic';
 import { api } from '@/lib/session';
 import { space, type, useTheme, type Tone } from '@/theme';
 
@@ -14,7 +15,8 @@ type Order = {
   originalFileName?: string;
   originalFileNames?: string[];
   customerInfo?: { name?: string; phone?: string };
-  deliveryOption?: { type?: string };
+  deliveryOption?: { type?: string; method?: string; deliveryCharge?: number; distance?: number };
+  shiprocket?: { awbCode?: string; courierName?: string };
 };
 
 const FILTERS = [
@@ -43,6 +45,9 @@ export default function OrdersScreen() {
   const [error, setError] = useState<string>();
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<FilterKey>('open');
+  const [handover, setHandover] = useState<Order | null>(null);
+  const [codeError, setCodeError] = useState<string>();
+  const [codeBusy, setCodeBusy] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -70,14 +75,47 @@ export default function OrdersScreen() {
   );
 
   const move = async (order: Order, status: string) => {
+    // Shop delivery: the customer's code proves the handover
+    if (status === 'delivered' && fulfilmentOf(order) === 'shop') {
+      setCodeError(undefined);
+      setHandover(order);
+      return;
+    }
     const res = await api(`/api/partner/orders/${encodeURIComponent(order.orderId)}`, { method: 'PATCH', body: { status } }).catch(() => null);
-    if (!res?.ok) Alert.alert('Could not update the order', (res?.data as any)?.error || 'Check your connection and try again.');
+    if (!res?.ok) Alert.alert('Could not update the order', (res?.data as { error?: string })?.error || 'Check your connection and try again.');
     load();
   };
 
+  const submitCode = async (code: string) => {
+    if (!handover) return;
+    setCodeBusy(true);
+    const res = await api<{ error?: string }>(`/api/partner/orders/${encodeURIComponent(handover.orderId)}`, { method: 'PATCH', body: { status: 'delivered', code } }).catch(() => null);
+    setCodeBusy(false);
+    if (!res?.ok) return setCodeError(res?.data?.error || 'Check your connection and try again.');
+    setHandover(null);
+    load();
+  };
+
+  const bookCourier = (order: Order) => {
+    Alert.alert(`Book a courier for ${order.orderId}?`, 'A courier will come to your shop to collect the parcel. Pack it with the order number on it.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Book courier',
+        onPress: async () => {
+          const res = await api<{ error?: string; courierName?: string; awbCode?: string }>(`/api/partner/orders/${encodeURIComponent(order.orderId)}/ship`, { method: 'POST' }).catch(() => null);
+          if (!res?.ok) Alert.alert('Could not book the courier', res?.data?.error || 'Check your connection and try again.');
+          else Alert.alert('Courier booked', `${res.data.courierName ?? 'Courier'} will collect it. AWB ${res.data.awbCode ?? ''}`);
+          load();
+        },
+      },
+    ]);
+  };
+
   const chooseStatus = (order: Order) => {
-    const next = NEXT_STATUSES[order.status] ?? [];
+    if (canBookCourier(order)) return bookCourier(order);
+    const next = nextStatuses(order);
     if (!next.length) return;
+    if (next.length === 1) return move(order, next[0]);
     const labels = next.map((s) => STATUS_LABEL[s] ?? s);
     if (Platform.OS === 'ios') {
       ActionSheetIOS.showActionSheetWithOptions({ title: `Order ${order.orderId}`, options: [...labels, 'Cancel'], cancelButtonIndex: labels.length }, (i) => {
@@ -117,17 +155,18 @@ export default function OrdersScreen() {
       {error ? <Banner tone="warning" title="Can't load orders" message={`${error}. Pull down to try again.`} /> : null}
 
       {visible.map((o) => {
-        const next = NEXT_STATUSES[o.status] ?? [];
+        const next = nextStatuses(o);
+        const book = canBookCourier(o);
         const name = o.originalFileName || o.originalFileNames?.[0] || 'Document';
         const files = o.originalFileNames?.length ?? 1;
         return (
           <Pressable
             key={o.orderId}
             onPress={() => chooseStatus(o)}
-            disabled={!next.length}
+            disabled={!next.length && !book}
             accessibilityRole="button"
             accessibilityLabel={`Order ${o.orderId}, ${STATUS_LABEL[o.status] ?? o.status}`}
-            accessibilityHint={next.length ? 'Change the order status' : undefined}
+            accessibilityHint={book ? 'Book the courier pickup' : next.length === 1 ? `Mark as ${STATUS_LABEL[next[0]] ?? next[0]}` : next.length ? 'Change the order status' : undefined}
             style={({ pressed }) => [pressed && { opacity: 0.7 }]}
           >
             <Card>
@@ -146,9 +185,16 @@ export default function OrdersScreen() {
                   {o.customerInfo?.name ? `${o.customerInfo.name} · ` : ''}
                   {new Date(o.createdAt).toLocaleDateString()}
                 </Text>
-                {typeof o.amount === 'number' ? <Text style={[type.footnote, { color: colors.success, fontWeight: '600' }]}>{money(o.amount * 0.9)} to you</Text> : null}
+                {typeof o.amount === 'number' ? <Text style={[type.footnote, { color: colors.success, fontWeight: '600' }]}>{money(partnerShare(o))} to you</Text> : null}
               </View>
-              {next.length ? <Text style={[type.footnote, { color: colors.primary }]}>Tap to update status</Text> : null}
+              <Text style={[type.footnote, { color: colors.textSecondary }]}>{fulfilmentLabel(o)}</Text>
+              {book ? (
+                <Text style={[type.footnote, { color: colors.primary }]}>Tap to book the courier pickup</Text>
+              ) : next.length === 1 ? (
+                <Text style={[type.footnote, { color: colors.primary }]}>Tap to mark {STATUS_LABEL[next[0]] ?? next[0]}</Text>
+              ) : next.length ? (
+                <Text style={[type.footnote, { color: colors.primary }]}>Tap to update status</Text>
+              ) : null}
             </Card>
           </Pressable>
         );
@@ -161,6 +207,8 @@ export default function OrdersScreen() {
           message="Paid orders for your shop appear here. Pull down to refresh."
         />
       ) : null}
+
+      <HandoverCodeModal key={handover?.orderId ?? 'none'} orderId={handover?.orderId ?? null} error={codeError} busy={codeBusy} onSubmit={submitCode} onClose={() => setHandover(null)} />
     </Screen>
   );
 }

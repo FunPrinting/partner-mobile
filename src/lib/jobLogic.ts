@@ -111,16 +111,50 @@ export function groupJobs(jobs: Job[], myDeviceId?: string): JobGroups {
 
 // ── Orders ──────────────────────────────────────────────────────────────
 
-/** Forward moves a partner may make (server: src/lib/partnerOrderTransitions.ts). */
-export const NEXT_STATUSES: Record<string, string[]> = {
-  paid: ['printing', 'printed'],
-  processing: ['printing', 'printed'],
-  printing: ['printed'],
-  printed: ['ready_for_pickup', 'delivered', 'completed'],
-  ready_for_pickup: ['delivered', 'completed'],
-  dispatched: ['delivered', 'completed'],
-  delivered: ['completed'],
-};
+/** How an order reaches the customer (server: src/lib/partnerOrderTransitions.ts). */
+export type Fulfilment = 'pickup' | 'shop' | 'courier';
+
+export interface OrderLike {
+  status?: string;
+  amount?: number;
+  deliveryOption?: { type?: string; method?: string; deliveryCharge?: number; distance?: number };
+  shiprocket?: { awbCode?: string; courierName?: string };
+}
+
+const RANK: Record<string, number> = { paid: 0, processing: 1, printing: 2, printed: 3, ready_for_pickup: 4, dispatched: 5, delivered: 6, completed: 7 };
+
+export function fulfilmentOf(order: OrderLike): Fulfilment {
+  if (order.deliveryOption?.type !== 'delivery') return 'pickup';
+  return order.deliveryOption.method === 'shop' ? 'shop' : 'courier';
+}
+
+/** The next step to offer: printing/printed first, then one step for this kind of order. */
+export function nextStatuses(order: OrderLike): string[] {
+  const rank = RANK[order.status ?? ''] ?? -1;
+  if (rank < 0) return [];
+  if (rank < RANK.printed) return ['printing', 'printed'].filter((s) => RANK[s] > rank);
+  const steps: Record<Fulfilment, string[]> = { pickup: ['ready_for_pickup', 'completed'], shop: ['dispatched', 'delivered'], courier: [] };
+  return steps[fulfilmentOf(order)].filter((s) => RANK[s] > rank).slice(0, 1);
+}
+
+/** A printed courier order that still needs its pickup booked. */
+export function canBookCourier(order: OrderLike): boolean {
+  return fulfilmentOf(order) === 'courier' && order.status === 'printed' && !order.shiprocket?.awbCode;
+}
+
+/** 90% of the printing, plus the whole delivery fee when the shop delivers itself. */
+export function partnerShare(order: OrderLike): number {
+  const amount = Number(order.amount || 0);
+  const delivery = order.deliveryOption?.type === 'delivery' ? Number(order.deliveryOption.deliveryCharge || 0) : 0;
+  return Math.round(((amount - delivery) * 0.9 + (fulfilmentOf(order) === 'shop' ? delivery : 0)) * 100) / 100;
+}
+
+export function fulfilmentLabel(order: OrderLike): string {
+  const how = fulfilmentOf(order);
+  if (how === 'shop') return `You deliver${order.deliveryOption?.distance ? ` · ${order.deliveryOption.distance} km` : ''}`;
+  if (how === 'courier') return order.shiprocket?.awbCode ? `Courier · ${order.shiprocket.courierName || 'booked'}` : 'Courier';
+  return 'Pickup';
+}
 
 export const STATUS_LABEL: Record<string, string> = {
   pending_payment: 'Awaiting payment',
@@ -129,9 +163,9 @@ export const STATUS_LABEL: Record<string, string> = {
   printing: 'Printing',
   printed: 'Printed',
   ready_for_pickup: 'Ready for pickup',
-  dispatched: 'Dispatched',
+  dispatched: 'Out for delivery',
   delivered: 'Delivered',
-  completed: 'Completed',
+  completed: 'Collected',
   cancelled: 'Cancelled',
   refunded: 'Refunded',
 };

@@ -52,7 +52,22 @@ test('helpers: versions, summaries, minutes left', () => {
   assert.equal(logic.isNewerVersion('v1.0.9', '1.0.10'), false);
   assert.equal(logic.fileSummary({ ...pdf, color: 'color', sided: 'double', copies: 2 }), 'A4 · Colour · Double-sided · 2 copies');
   assert.equal(logic.minutesLeft('2026-11-18T10:10:00Z', Date.parse('2026-11-18T10:00:30Z')), 10);
-  assert.deepEqual(logic.NEXT_STATUSES.printed, ['ready_for_pickup', 'delivered', 'completed']);
+});
+
+test('order steps depend on pickup, shop delivery or courier (same as the server)', () => {
+  const shop = (status: string) => ({ status, amount: 90, deliveryOption: { type: 'delivery', method: 'shop', deliveryCharge: 40 } });
+  const courier = (status: string) => ({ status, amount: 76, deliveryOption: { type: 'delivery', method: 'courier', deliveryCharge: 26 } });
+  assert.deepEqual(logic.nextStatuses({ status: 'paid' }), ['printing', 'printed']);
+  assert.deepEqual(logic.nextStatuses({ status: 'printed' }), ['ready_for_pickup']);
+  assert.deepEqual(logic.nextStatuses({ status: 'ready_for_pickup' }), ['completed']);
+  assert.deepEqual(logic.nextStatuses(shop('printed')), ['dispatched']);
+  assert.deepEqual(logic.nextStatuses(shop('dispatched')), ['delivered']);
+  assert.deepEqual(logic.nextStatuses(courier('printed')), []);
+  assert.equal(logic.canBookCourier(courier('printed')), true);
+  assert.equal(logic.canBookCourier({ ...courier('printed'), shiprocket: { awbCode: 'X' } }), false);
+  assert.equal(logic.partnerShare(shop('printed')), 85);
+  assert.equal(logic.partnerShare(courier('printed')), 45);
+  assert.equal(logic.fulfilmentOf({ status: 'printed', deliveryOption: { type: 'delivery' } }), 'courier');
 });
 
 test('encoding matches Node base64 and compares safely', () => {
