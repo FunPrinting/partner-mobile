@@ -64,8 +64,15 @@ function enabled() {
 
 const jobPath = (id: string) => `/api/partner/v1/jobs/${encodeURIComponent(id)}`;
 
+/** Shown to the shop as "Printed on <phone> · <printer>". */
+function printerLabel(p: PrinterSetting | null): string | undefined {
+  if (!p) return undefined;
+  return p.kind === 'dialog' ? 'System print dialog' : p.name || undefined;
+}
+
 function report(jobId: string, status: string, error?: string) {
-  return api(jobPath(jobId), { method: 'POST', body: { action: 'report', status, ...(error ? { error: error.slice(0, 500) } : {}) } });
+  const printer = printerLabel(settingsStore.get().printer);
+  return api(jobPath(jobId), { method: 'POST', body: { action: 'report', status, ...(error ? { error: error.slice(0, 500) } : {}), ...(printer ? { printer: printer.slice(0, 200) } : {}) } });
 }
 
 async function flushReports() {

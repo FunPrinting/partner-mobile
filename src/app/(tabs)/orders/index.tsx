@@ -17,6 +17,7 @@ type Order = {
   customerInfo?: { name?: string; phone?: string };
   deliveryOption?: { type?: string; method?: string; deliveryCharge?: number; distance?: number };
   shiprocket?: { awbCode?: string; courierName?: string };
+  job?: { printedBy?: { deviceName?: string; printer?: string } };
 };
 
 const FILTERS = [
@@ -187,7 +188,10 @@ export default function OrdersScreen() {
                 </Text>
                 {typeof o.amount === 'number' ? <Text style={[type.footnote, { color: colors.success, fontWeight: '600' }]}>{money(partnerShare(o))} to you</Text> : null}
               </View>
-              <Text style={[type.footnote, { color: colors.textSecondary }]}>{fulfilmentLabel(o)}</Text>
+              <Text style={[type.footnote, { color: colors.textSecondary }]}>
+                {fulfilmentLabel(o)}
+                {o.job?.printedBy ? ` · Printed on ${[o.job.printedBy.deviceName, o.job.printedBy.printer].filter(Boolean).join(' · ') || 'a shop device'}` : ''}
+              </Text>
               {book ? (
                 <Text style={[type.footnote, { color: colors.primary }]}>Tap to book the courier pickup</Text>
               ) : next.length === 1 ? (
