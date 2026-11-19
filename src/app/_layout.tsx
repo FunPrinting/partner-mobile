@@ -15,6 +15,8 @@ export default function RootLayout() {
     <>
       <StatusBar style="auto" />
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }}>
+        {/* OAuth callback — must be accessible regardless of sign-in state */}
+        <Stack.Screen name="callback" options={{ animation: 'none' }} />
         <Stack.Protected guard={signedIn}>
           <Stack.Screen name="(tabs)" />
         </Stack.Protected>
