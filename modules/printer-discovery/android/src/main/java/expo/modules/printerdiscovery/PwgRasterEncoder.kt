@@ -141,7 +141,8 @@ object PwgRasterEncoder {
     isColor: Boolean = true,
     isDuplex: Boolean = false,
     pageSizeName: String = "iso_a4_210x297mm",
-    reverseOrder: Boolean = true
+    reverseOrder: Boolean = true,
+    scaling: String = "fit"
   ) {
     val uri = if (pdfFileOrUri.startsWith("content://") || pdfFileOrUri.startsWith("file://")) {
       Uri.parse(pdfFileOrUri)
@@ -192,28 +193,64 @@ object PwgRasterEncoder {
         targetPages
       }
 
+      // Standard ISO A4 (210x297mm = 595.28x841.89pt) and A3 (297x420mm = 841.89x1190.55pt)
+      val isA3 = pageSizeName.contains("a3", ignoreCase = true)
+      val mediaWidthPt = if (isA3) 841.8898f else 595.2756f
+      val mediaHeightPt = if (isA3) 1190.5512f else 841.8898f
+      val mediaWidthPx = Math.round(mediaWidthPt * dpi / 72f)
+      val mediaHeightPx = Math.round(mediaHeightPt * dpi / 72f)
+
       // 1. Write the 4-byte PWG file synchronization word
       outputStream.write(SYNC_WORD)
 
-      // 2. Encode each page
+      // 2. Encode each page onto the physical media canvas
       for (pageIdx in orderedPages) {
         val page = renderer.openPage(pageIdx)
-        val widthPt = page.width
-        val heightPt = page.height
+        val docWidthPt = page.width.toFloat()
+        val docHeightPt = page.height.toFloat()
 
-        val targetWidthPx = Math.max(1, ((widthPt * dpi + 36) / 72))
-        val targetHeightPx = Math.max(1, ((heightPt * dpi + 36) / 72))
-
-        val bitmap = Bitmap.createBitmap(targetWidthPx, targetHeightPx, Bitmap.Config.ARGB_8888)
+        val bitmap = Bitmap.createBitmap(mediaWidthPx, mediaHeightPx, Bitmap.Config.ARGB_8888)
         bitmap.eraseColor(Color.WHITE)
-        page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_PRINT)
+
+        val matrix = android.graphics.Matrix()
+        if (scaling.equals("none", ignoreCase = true)) {
+          // 1:1 Scale (Actual Size): 1 pt = dpi / 72 pixels, centered on sheet
+          val scale = dpi / 72f
+          val renderedW = docWidthPt * scale
+          val renderedH = docHeightPt * scale
+          val offsetX = (mediaWidthPx - renderedW) / 2f
+          val offsetY = (mediaHeightPx - renderedH) / 2f
+          matrix.postScale(scale, scale)
+          matrix.postTranslate(offsetX, offsetY)
+        } else {
+          // "fit": Scale to Printable Area
+          // Hardware non-printable margins for consumer Wi-Fi inkjets (e.g. Epson L3250) are ~3mm (8.5 pt)
+          val marginPt = 8.5039f // 3 mm in points
+          val marginPx = Math.round(marginPt * dpi / 72f)
+          val availWidthPx = (mediaWidthPx - 2 * marginPx).coerceAtLeast(1)
+          val availHeightPx = (mediaHeightPx - 2 * marginPx).coerceAtLeast(1)
+
+          val scaleX = availWidthPx.toFloat() / (docWidthPt * dpi / 72f)
+          val scaleY = availHeightPx.toFloat() / (docHeightPt * dpi / 72f)
+          val fitRatio = Math.min(scaleX, scaleY)
+          val finalScale = (dpi / 72f) * fitRatio
+
+          val renderedW = docWidthPt * finalScale
+          val renderedH = docHeightPt * finalScale
+          val offsetX = (mediaWidthPx - renderedW) / 2f
+          val offsetY = (mediaHeightPx - renderedH) / 2f
+          matrix.postScale(finalScale, finalScale)
+          matrix.postTranslate(offsetX, offsetY)
+        }
+
+        page.render(bitmap, null, matrix, PdfRenderer.Page.RENDER_MODE_FOR_PRINT)
         page.close()
 
         val header = createPageHeader(
-          widthPixels = targetWidthPx,
-          heightPixels = targetHeightPx,
-          pageWidthPoints = widthPt,
-          pageHeightPoints = heightPt,
+          widthPixels = mediaWidthPx,
+          heightPixels = mediaHeightPx,
+          pageWidthPoints = Math.round(mediaWidthPt),
+          pageHeightPoints = Math.round(mediaHeightPt),
           dpi = dpi,
           isColor = isColor,
           isDuplex = isDuplex,

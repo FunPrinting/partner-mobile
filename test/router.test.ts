@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { choosePrinter, whyImpossible, type RouterPrinter } from '../src/lib/router.ts';
 import { planRuns, isWholeFile } from '../src/lib/runs.ts';
-import { migrateSettings, routerPrinter, upsertPrinter, setPreferredBw, setEnabled, setPrinterDpi, setPrinterReverseOrder, type IppPrinter, type PrinterEntry } from '../src/lib/printerModel.ts';
+import { migrateSettings, routerPrinter, upsertPrinter, setPreferredBw, setEnabled, setPrinterDpi, setPrinterReverseOrder, setPrinterScaling, type IppPrinter, type PrinterEntry } from '../src/lib/printerModel.ts';
 import * as logic from '../src/lib/jobLogic.ts';
 
 const colour: RouterPrinter = { id: 'c', name: 'Colour', enabled: true, caps: { color: true, duplex: false, a3: false, pdf: true } };
@@ -132,4 +132,12 @@ test('summarySlip preserves setting in migrateSettings', () => {
   assert.equal(s.summarySlip, false);
   const def = migrateSettings({ mode: 'companion' });
   assert.equal(def.summarySlip, undefined);
+});
+
+test('scaling setting updates entry and upsert preserves it', () => {
+  const p: PrinterEntry = { ...ipp, id: 'p1', scaling: 'fit' };
+  const updated = setPrinterScaling([p], 'p1', 'none');
+  assert.equal((updated[0] as IppPrinter).scaling, 'none');
+  const refreshed = upsertPrinter(updated, { ...ipp, id: 'p1', address: 'ipp://10.0.0.50:631/ipp/print' });
+  assert.equal((refreshed[0] as IppPrinter).scaling, 'none');
 });

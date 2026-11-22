@@ -12,7 +12,7 @@ import type { FoundPrinter } from '@/lib/discovery';
 import { canSearch, findPrinters } from '@/lib/findPrinters';
 import { chooseAirPrintPrinter, checkIppPrinter, printFile } from '@/lib/printers';
 import type { IppPrinter, PrinterEntry } from '@/lib/printerModel';
-import { changePrinterDpi, changePrinterReverseOrder, preferForBw, removePrinter, savePrinter, settingsStore, switchPrinter } from '@/lib/settings';
+import { changePrinterDpi, changePrinterReverseOrder, changePrinterScaling, preferForBw, removePrinter, savePrinter, settingsStore, switchPrinter } from '@/lib/settings';
 import { useStore } from '@/lib/store';
 import { space } from '@/theme';
 
@@ -24,11 +24,12 @@ function abilities(p: PrinterEntry): string {
   const isRaster = !p.formats.includes('application/pdf') && p.formats.includes('image/pwg-raster');
   const dpiText = p.kind === 'ipp' ? `${p.dpi || 300} DPI` : '';
   const orderText = p.kind === 'ipp' && p.reverseOrder === false ? '1→N' : 'LIFO';
+  const scaleText = p.kind === 'ipp' && p.scaling === 'none' ? '100% 1:1' : 'Fit';
   const out = [
     p.colorModes.length ? (p.colorModes.includes('color') ? 'Colour' : 'B&W only') : '',
     p.sides.length ? (p.sides.some((s) => s.startsWith('two-sided')) ? 'Double-sided' : 'Single-sided') : '',
     p.media.includes('iso_a3_297x420mm') ? 'A3' : '',
-    isRaster ? `Direct Host (${dpiText} · ${orderText})` : dpiText,
+    isRaster ? `Direct Host (${dpiText} · ${orderText} · ${scaleText})` : dpiText,
   ];
   return out.filter(Boolean).join(' · ') || 'Wi-Fi';
 }
@@ -190,6 +191,25 @@ export default function PrinterSetup() {
                         />
                       );
                     })}
+                  </View>
+                  <View style={{ gap: space.xs, marginTop: 4 }}>
+                    <Body tone="secondary">Page Scaling</Body>
+                    <View style={{ flexDirection: 'row', gap: space.xs, flexWrap: 'wrap' }}>
+                      {([
+                        { val: 'fit', label: 'Fit to Printable Area' },
+                        { val: 'none', label: '100% Actual Size' },
+                      ] as const).map((opt) => {
+                        const isSelected = (p.scaling || 'fit') === opt.val;
+                        return (
+                          <Button
+                            key={opt.val}
+                            variant={isSelected ? 'primary' : 'secondary'}
+                            title={isSelected ? `${opt.label} ✓` : opt.label}
+                            onPress={() => changePrinterScaling(p.id, opt.val)}
+                          />
+                        );
+                      })}
+                    </View>
                   </View>
                   <SwitchRow
                     title="LIFO stack order (Page N to 1)"

@@ -239,6 +239,7 @@ export async function printFile(printer: PrinterEntry, file: File, opts: JobFile
         dpi: (printer as IppPrinter).dpi || 300,
         jobName,
         reverseOrder: (printer as IppPrinter).reverseOrder !== false,
+        scaling: (printer as IppPrinter).scaling || 'fit',
       });
       if (rasterRes.jobId) {
         await waitForIppJob(urls, rasterRes.jobId, onStatus);
@@ -326,6 +327,7 @@ export async function printOrderSummary(printer: PrinterEntry, job: Job, onStatu
         dpi: (printer as IppPrinter).dpi || 300,
         jobName: `Summary #${job.deliveryNumber || job.orderId}`,
         reverseOrder: false,
+        scaling: 'fit',
       });
       if (rasterRes.jobId) {
         await waitForIppJob(urls, rasterRes.jobId, onStatus);

@@ -93,8 +93,7 @@ object IppClient {
     ).distinct()
 
     val candidates = mutableListOf<String>()
-    if (isExplicitHttps || port == 631) {
-      // Prioritize HTTPS/IPPS for port 631 to avoid HTTP 426 latency
+    if (isExplicitHttps) {
       for (p in candidatePaths) {
         candidates.add("https://$host:$port$p")
         candidates.add("http://$host:$port$p")
@@ -179,11 +178,6 @@ object IppClient {
       targetUrl = "https://" + targetUrl.substring(7)
     }
 
-    // Modern Wi-Fi printers on port 631 (such as Epson L3250) enforce IPPS / TLS
-    if (targetUrl.contains(":631") && targetUrl.startsWith("http://", ignoreCase = true)) {
-      targetUrl = "https://" + targetUrl.substring(7)
-    }
-
     val copies = ((options["copies"] as? Number)?.toInt() ?: 1).coerceIn(1, 99)
     val color = (options["color"] as? String) ?: "color"
     val sided = (options["sided"] as? String) ?: "single"
@@ -191,6 +185,7 @@ object IppClient {
     val jobName = (options["jobName"] as? String) ?: "FunPrinting Job"
     val dpi = ((options["dpi"] as? Number)?.toInt() ?: 300).coerceIn(150, 600)
     val reverseOrder = (options["reverseOrder"] as? Boolean) ?: true
+    val scaling = (options["scaling"] as? String) ?: "fit"
 
     val pages = (options["pages"] as? List<*>)?.mapNotNull { (it as? Number)?.toInt() }
 
@@ -214,7 +209,8 @@ object IppClient {
           copies = copies,
           sided = sided,
           color = color,
-          pageSize = pageSize
+          pageSize = pageSize,
+          scaling = scaling
         )
 
         // 2. Stream PWG raster from PDF directly into the socket
@@ -227,7 +223,8 @@ object IppClient {
           isColor = (color != "bw"),
           isDuplex = (sided == "double"),
           pageSizeName = if (pageSize == "A3") "iso_a3_297x420mm" else "iso_a4_210x297mm",
-          reverseOrder = reverseOrder
+          reverseOrder = reverseOrder,
+          scaling = scaling
         )
 
         conn.outputStream.flush()
@@ -262,9 +259,22 @@ object IppClient {
       } catch (e: Exception) {
         if (url.startsWith("http://", ignoreCase = true)) {
           // If plain HTTP was reset by printer or failed, retry automatically via TLS/HTTPS
-          conn.disconnect()
-          val httpsUrl = "https://" + url.substring(7)
-          return streamJob(httpsUrl)
+          try {
+            conn.disconnect()
+            val httpsUrl = "https://" + url.substring(7)
+            return streamJob(httpsUrl)
+          } catch (_: Exception) {
+            throw e
+          }
+        } else if (url.startsWith("https://", ignoreCase = true)) {
+          // If TLS/HTTPS had a connection reset or failed, retry automatically via plain HTTP
+          try {
+            conn.disconnect()
+            val httpUrl = "http://" + url.substring(8)
+            return streamJob(httpUrl)
+          } catch (_: Exception) {
+            throw e
+          }
         }
         throw e
       } finally {
@@ -372,7 +382,8 @@ object IppClient {
     copies: Int,
     sided: String,
     color: String,
-    pageSize: String
+    pageSize: String,
+    scaling: String = "fit"
   ) {
     val bb = ByteBuffer.allocate(2048).order(ByteOrder.BIG_ENDIAN)
 
@@ -403,6 +414,12 @@ object IppClient {
 
     val mediaKeyword = if (pageSize == "A3") "iso_a3_297x420mm" else "iso_a4_210x297mm"
     writeAttr(bb, 0x44, "media", mediaKeyword)
+
+    // Standard IPP print-scaling keyword (PWG 5100.16)
+    // "fit": fits entirely within printable area without cropping or over-scaling
+    // "none": exact 1:1 scale (no hardware/firmware scaling)
+    val scalingKeyword = if (scaling.equals("none", ignoreCase = true)) "none" else "fit"
+    writeAttr(bb, 0x44, "print-scaling", scalingKeyword)
 
     // End tag
     bb.put(0x03.toByte())

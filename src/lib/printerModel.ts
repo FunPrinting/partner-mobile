@@ -21,6 +21,8 @@ export type IppPrinter = Base & {
   dpi?: 200 | 300 | 600;
   /** Prints pages in LIFO stack order (Page N down to Page 1) for face-up inkjet output trays (default true). */
   reverseOrder?: boolean;
+  /** Page scaling mode: 'fit' (Fit to printable area, recommended) or 'none' (100% Actual size). */
+  scaling?: 'fit' | 'none';
 };
 export type AirPrintPrinter = Base & { kind: 'airprint'; url: string };
 export type DialogPrinter = Base & { kind: 'dialog' };
@@ -84,6 +86,7 @@ export function upsertPrinter(list: PrinterEntry[], next: PrinterEntry): Printer
   const keep = list[i];
   const keepDpi = keep.kind === 'ipp' ? keep.dpi : undefined;
   const keepRev = keep.kind === 'ipp' ? keep.reverseOrder : undefined;
+  const keepScaling = keep.kind === 'ipp' ? keep.scaling : undefined;
   const merged = {
     ...next,
     id: keep.id,
@@ -91,6 +94,7 @@ export function upsertPrinter(list: PrinterEntry[], next: PrinterEntry): Printer
     preferredBw: keep.preferredBw,
     ...(keepDpi ? { dpi: keepDpi } : {}),
     ...(keepRev !== undefined ? { reverseOrder: keepRev } : {}),
+    ...(keepScaling ? { scaling: keepScaling } : {}),
   } as PrinterEntry;
   return list.map((p, k) => (k === i ? merged : p));
 }
@@ -103,6 +107,11 @@ export function setPrinterDpi(list: PrinterEntry[], id: string, dpi: 200 | 300 |
 /** Updates whether to print in LIFO stack order (Page N to 1). */
 export function setPrinterReverseOrder(list: PrinterEntry[], id: string, reverseOrder: boolean): PrinterEntry[] {
   return list.map((p) => (p.id === id && p.kind === 'ipp' ? { ...p, reverseOrder } : p));
+}
+
+/** Updates the page scaling mode for a printer ('fit' = Fit to printable area, 'none' = Actual size 100%). */
+export function setPrinterScaling(list: PrinterEntry[], id: string, scaling: 'fit' | 'none'): PrinterEntry[] {
+  return list.map((p) => (p.id === id && p.kind === 'ipp' ? { ...p, scaling } : p));
 }
 
 /** Only one printer is "preferred for B&W". */
