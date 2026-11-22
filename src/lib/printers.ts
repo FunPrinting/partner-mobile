@@ -59,8 +59,8 @@ async function ippCall(httpUrl: string, body: Uint8Array<ArrayBuffer>, timeoutMs
     );
   }
   if (res.status === 426) {
-    // The printer only accepts encrypted IPP with its own certificate, which a phone app cannot verify
-    throw new Error('This printer only accepts secure connections from computers. Print its orders from the desktop app.');
+    // The printer enforces TLS/encrypted IPPS and raster formatting (e.g. Epson L-series)
+    throw new Error('This Wi-Fi printer requires Android print services (Epson Print Enabler or Mopria). Tap "Use the system print dialog" below to print to it over Wi-Fi.');
   }
   if (!res.ok) throw new Error(`Printer answered HTTP ${res.status}`);
   const bytes = typeof res.bytes === 'function' ? await res.bytes() : new Uint8Array(await res.arrayBuffer());

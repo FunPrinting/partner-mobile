@@ -6,7 +6,7 @@
 import { File } from 'expo-file-system';
 import * as Print from 'expo-print';
 import { useState } from 'react';
-import { Platform, View } from 'react-native';
+import { Alert, Platform, View } from 'react-native';
 import { Banner, Body, Button, Card, Field, Pill, Section, SwitchRow } from '@/components/ui';
 import type { FoundPrinter } from '@/lib/discovery';
 import { canSearch, findPrinters } from '@/lib/findPrinters';
@@ -65,17 +65,44 @@ export default function PrinterSetup() {
     }
   };
 
-  const connect = async (addr: string, uuid?: string, key = 'manual') => {
+  const connect = async (addr: string, uuid?: string, key = 'manual', printerName?: string) => {
     setBusy(key);
     setMessage(undefined);
+    const addAsSystemPrint = (suggestedName?: string) => {
+      const name = suggestedName ? `${suggestedName} (Wi-Fi)` : 'Wi-Fi Printer';
+      savePrinter({ kind: 'dialog', id: uuid || key, name, enabled: true, preferredBw: false });
+      setMessage({ tone: 'success', title: `${name} is ready`, text: 'Orders will print using Android print service over Wi-Fi' });
+    };
+
     try {
       const r = await readPrinter(addr, uuid);
-      if ('error' in r) return setMessage(r.error);
+      if ('error' in r) {
+        Alert.alert(
+          `${printerName || 'Wi-Fi Printer'} setup`,
+          `${r.error.title}\n\n${r.error.text}\n\nWould you like to add it using the Android Print Service?`,
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Add with System Print', onPress: () => addAsSystemPrint(printerName) },
+          ]
+        );
+        return setMessage(r.error);
+      }
       savePrinter(r.entry);
       setMessage({ tone: 'success', title: `${r.entry.name} is ready`, text: abilities(r.entry) });
       if (key === 'manual') setAddress('');
     } catch (err) {
-      setMessage({ tone: 'danger', title: 'Printer not found', text: err instanceof Error ? err.message : undefined });
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes('426') || msg.includes('requires Android') || msg.includes('secure connections') || msg.includes('raster')) {
+        Alert.alert(
+          `${printerName || 'Wi-Fi Printer'} setup`,
+          `This printer uses Epson/host raster printing.\n\nWould you like to add it using Android System Print to print over Wi-Fi?`,
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Add with System Print', onPress: () => addAsSystemPrint(printerName) },
+          ]
+        );
+      }
+      setMessage({ tone: 'danger', title: 'Printer setup notice', text: msg });
     } finally {
       setBusy(null);
     }
@@ -152,7 +179,7 @@ export default function PrinterSetup() {
                 </View>
                 {f.announced.color !== undefined ? <Pill label={f.announced.color ? 'Colour' : 'B&W'} /> : null}
               </View>
-              <Button variant="secondary" title="Add" onPress={() => f.address && connect(f.address, f.uuid, f.id)} loading={busy === f.id} disabled={!f.address || busy !== null} />
+              <Button variant="secondary" title="Add" onPress={() => f.address && connect(f.address, f.uuid, f.id, f.name)} loading={busy === f.id} disabled={!f.address || busy !== null} />
             </View>
           ))}
           <Field label="Printer address" placeholder="192.168.1.20" autoCapitalize="none" autoCorrect={false} keyboardType="url" value={address} onChangeText={setAddress} hint="Shown on the printer's network settings page or its printed network report." />
