@@ -33,7 +33,13 @@ type Profile = {
     scanning?: { enabled?: boolean };
     photocopying?: { enabled?: boolean; supportsColor?: boolean };
     plasticFiles?: { enabled?: boolean };
-    delivery?: { enabled?: boolean };
+    delivery?: {
+      enabled?: boolean;
+    };
+  };
+  delivery?: {
+    courier?: { enabled?: boolean };
+    self?: { enabled?: boolean; radiusKm?: number; fee?: number; etaMinutes?: number };
   };
   pricing?: {
     printing?: {
@@ -107,7 +113,11 @@ export default function ShopScreen() {
   const [plasticFilesEnabled, setPlasticFilesEnabled] = useState(false);
   const [plasticFilesPrice, setPlasticFilesPrice] = useState('');
   
-  const [deliveryEnabled, setDeliveryEnabled] = useState(false);
+  const [deliverySelfEnabled, setDeliverySelfEnabled] = useState(false);
+  const [deliveryRadius, setDeliveryRadius] = useState('3');
+  const [deliveryFee, setDeliveryFee] = useState('30');
+  const [deliveryEta, setDeliveryEta] = useState('120');
+  const [deliveryCourierEnabled, setDeliveryCourierEnabled] = useState(false);
   
   const [phones, setPhones] = useState<string[]>([]);
   const [location, setLocation] = useState<Point>(DEFAULT_POINT);
@@ -179,7 +189,11 @@ export default function ShopScreen() {
       setPlasticFilesEnabled(partner.servicesOffered?.plasticFiles?.enabled ?? false);
       setPlasticFilesPrice(String(partner.pricing?.plasticFiles ?? ''));
       
-      setDeliveryEnabled(partner.servicesOffered?.delivery?.enabled ?? false);
+      setDeliverySelfEnabled(partner.delivery?.self?.enabled ?? partner.servicesOffered?.delivery?.enabled ?? false);
+      setDeliveryRadius(String(partner.delivery?.self?.radiusKm ?? 3));
+      setDeliveryFee(String(partner.delivery?.self?.fee ?? 30));
+      setDeliveryEta(String(partner.delivery?.self?.etaMinutes ?? 120));
+      setDeliveryCourierEnabled(partner.delivery?.courier?.enabled ?? false);
       
       setPhones(partner.phoneNumbers ?? []);
       setLocation(toPoint(partner.location?.coordinates) ?? DEFAULT_POINT);
@@ -252,26 +266,37 @@ export default function ShopScreen() {
           scanning: { enabled: scanningEnabled },
           photocopying: { enabled: photocopyingEnabled, supportsColor: photocopyingColor },
           plasticFiles: { enabled: plasticFilesEnabled },
-          delivery: { enabled: deliveryEnabled },
+          delivery: { enabled: deliverySelfEnabled || deliveryCourierEnabled },
           customServices: [],
+        },
+        delivery: {
+          self: {
+            enabled: deliverySelfEnabled,
+            radiusKm: num(deliveryRadius, 3),
+            fee: num(deliveryFee, 30),
+            etaMinutes: num(deliveryEta, 120),
+          },
+          courier: {
+            enabled: deliveryCourierEnabled,
+          },
         },
         pricing: {
           printing: {
             a4: {
               blackAndWhite: { singleSided: num(priceA4.bwSingle, 2), doubleSided: num(priceA4.bwDouble, 3) },
-              color: { singleSided: num(priceA4.colorSingle, 10), doubleSided: num(priceA4.colorDouble, 15) },
+              color: { singleSided: num(priceA4.colorSingle, 5), doubleSided: num(priceA4.colorDouble, 8) },
             },
             a3: {
               blackAndWhite: { singleSided: num(priceA3.bwSingle, 4), doubleSided: num(priceA3.bwDouble, 6) },
-              color: { singleSided: num(priceA3.colorSingle, 20), doubleSided: num(priceA3.colorDouble, 30) },
+              color: { singleSided: num(priceA3.colorSingle, 10), doubleSided: num(priceA3.colorDouble, 15) },
             },
             letter: {
               blackAndWhite: { singleSided: num(priceA4.bwSingle, 2), doubleSided: num(priceA4.bwDouble, 3) },
-              color: { singleSided: num(priceA4.colorSingle, 10), doubleSided: num(priceA4.colorDouble, 15) },
+              color: { singleSided: num(priceA4.colorSingle, 5), doubleSided: num(priceA4.colorDouble, 8) },
             },
             legal: {
               blackAndWhite: { singleSided: num(priceA4.bwSingle, 2), doubleSided: num(priceA4.bwDouble, 3) },
-              color: { singleSided: num(priceA4.colorSingle, 10), doubleSided: num(priceA4.colorDouble, 15) },
+              color: { singleSided: num(priceA4.colorSingle, 5), doubleSided: num(priceA4.colorDouble, 8) },
             },
           },
           binding: {
@@ -340,72 +365,107 @@ export default function ShopScreen() {
             </Card>
           </Section>
 
-          <Section title="Printing service" footer="Configure your printer capabilities. A3 printer can also print A4 and smaller.">
+          <Section title="Printing service" footer="Configure your printer capabilities. An A3 printer can also print A4 and smaller.">
             <Card>
               <SwitchRow first title="Enable printing" subtitle="Core printing service" value={printingEnabled} onValueChange={edit(setPrintingEnabled)} />
-              <SwitchRow title="Supports color" subtitle="Color printing available" value={supportsColor} onValueChange={edit(setSupportsColor)} />
-              <SwitchRow title="Supports B&W" subtitle="Black & white printing" value={supportsBW} onValueChange={edit(setSupportsBW)} />
-              <SwitchRow title="Supports duplex" subtitle="Double-sided printing" value={supportsDuplex} onValueChange={edit(setSupportsDuplex)} />
+              {printingEnabled ? (
+                <>
+                  <SwitchRow title="Large format (A3)" subtitle="Printer supports A3 paper" value={maxPaperSize === 'a3'} onValueChange={(v) => edit(setMaxPaperSize)(v ? 'a3' : 'a4')} />
+                  <SwitchRow title="Supports B&W" subtitle="Black & white printing" value={supportsBW} onValueChange={edit(setSupportsBW)} />
+                  <SwitchRow title="Supports color" subtitle="Color printing available" value={supportsColor} onValueChange={edit(setSupportsColor)} />
+                  <SwitchRow title="Supports duplex" subtitle="Double-sided printing" value={supportsDuplex} onValueChange={edit(setSupportsDuplex)} />
+                </>
+              ) : null}
             </Card>
           </Section>
 
-          <Section title="Printing prices (₹)" footer="Per-page prices. Customers pay these plus 3% processing fee.">
-            <Card>
-              <Text style={[type.footnote, { color: colors.textSecondary, marginBottom: space.sm }]}>A4 size</Text>
-              <View style={{ flexDirection: 'row', gap: space.md, marginBottom: space.md }}>
-                <View style={{ flex: 1 }}>
-                  <Field label="B&W single" keyboardType="decimal-pad" value={priceA4.bwSingle} onChangeText={(v) => edit(setPriceA4)({ ...priceA4, bwSingle: v })} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Field label="B&W duplex" keyboardType="decimal-pad" value={priceA4.bwDouble} onChangeText={(v) => edit(setPriceA4)({ ...priceA4, bwDouble: v })} />
-                </View>
-              </View>
-              <View style={{ flexDirection: 'row', gap: space.md, marginBottom: space.lg }}>
-                <View style={{ flex: 1 }}>
-                  <Field label="Color single" keyboardType="decimal-pad" value={priceA4.colorSingle} onChangeText={(v) => edit(setPriceA4)({ ...priceA4, colorSingle: v })} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Field label="Color duplex" keyboardType="decimal-pad" value={priceA4.colorDouble} onChangeText={(v) => edit(setPriceA4)({ ...priceA4, colorDouble: v })} />
-                </View>
-              </View>
-              
-              <Text style={[type.footnote, { color: colors.textSecondary, marginBottom: space.sm }]}>A3 size</Text>
-              <View style={{ flexDirection: 'row', gap: space.md, marginBottom: space.md }}>
-                <View style={{ flex: 1 }}>
-                  <Field label="B&W single" keyboardType="decimal-pad" value={priceA3.bwSingle} onChangeText={(v) => edit(setPriceA3)({ ...priceA3, bwSingle: v })} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Field label="B&W duplex" keyboardType="decimal-pad" value={priceA3.bwDouble} onChangeText={(v) => edit(setPriceA3)({ ...priceA3, bwDouble: v })} />
-                </View>
-              </View>
-              <View style={{ flexDirection: 'row', gap: space.md }}>
-                <View style={{ flex: 1 }}>
-                  <Field label="Color single" keyboardType="decimal-pad" value={priceA3.colorSingle} onChangeText={(v) => edit(setPriceA3)({ ...priceA3, colorSingle: v })} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Field label="Color duplex" keyboardType="decimal-pad" value={priceA3.colorDouble} onChangeText={(v) => edit(setPriceA3)({ ...priceA3, colorDouble: v })} />
-                </View>
-              </View>
-            </Card>
-          </Section>
+          {printingEnabled ? (
+            <Section title="Printing prices (₹)" footer="Per-page prices. Customers pay these plus 3% processing fee.">
+              <Card>
+                <Text style={[type.footnote, { color: colors.textSecondary, marginBottom: space.sm, fontWeight: '700' }]}>A4 size</Text>
+                {supportsBW ? (
+                  <View style={{ flexDirection: 'row', gap: space.md, marginBottom: space.md }}>
+                    <View style={{ flex: 1 }}>
+                      <Field label="B&W single" keyboardType="decimal-pad" placeholder="2" value={priceA4.bwSingle} onChangeText={(v) => edit(setPriceA4)({ ...priceA4, bwSingle: v })} />
+                    </View>
+                    {supportsDuplex ? (
+                      <View style={{ flex: 1 }}>
+                        <Field label="B&W duplex" keyboardType="decimal-pad" placeholder="3" value={priceA4.bwDouble} onChangeText={(v) => edit(setPriceA4)({ ...priceA4, bwDouble: v })} />
+                      </View>
+                    ) : null}
+                  </View>
+                ) : null}
+                {supportsColor ? (
+                  <View style={{ flexDirection: 'row', gap: space.md, marginBottom: maxPaperSize === 'a3' ? space.lg : space.xs }}>
+                    <View style={{ flex: 1 }}>
+                      <Field label="Color single" keyboardType="decimal-pad" placeholder="5" value={priceA4.colorSingle} onChangeText={(v) => edit(setPriceA4)({ ...priceA4, colorSingle: v })} />
+                    </View>
+                    {supportsDuplex ? (
+                      <View style={{ flex: 1 }}>
+                        <Field label="Color duplex" keyboardType="decimal-pad" placeholder="8" value={priceA4.colorDouble} onChangeText={(v) => edit(setPriceA4)({ ...priceA4, colorDouble: v })} />
+                      </View>
+                    ) : null}
+                  </View>
+                ) : null}
+                
+                {maxPaperSize === 'a3' ? (
+                  <>
+                    <Text style={[type.footnote, { color: colors.textSecondary, marginBottom: space.sm, fontWeight: '700' }]}>A3 size</Text>
+                    {supportsBW ? (
+                      <View style={{ flexDirection: 'row', gap: space.md, marginBottom: space.md }}>
+                        <View style={{ flex: 1 }}>
+                          <Field label="B&W single" keyboardType="decimal-pad" placeholder="4" value={priceA3.bwSingle} onChangeText={(v) => edit(setPriceA3)({ ...priceA3, bwSingle: v })} />
+                        </View>
+                        {supportsDuplex ? (
+                          <View style={{ flex: 1 }}>
+                            <Field label="B&W duplex" keyboardType="decimal-pad" placeholder="6" value={priceA3.bwDouble} onChangeText={(v) => edit(setPriceA3)({ ...priceA3, bwDouble: v })} />
+                          </View>
+                        ) : null}
+                      </View>
+                    ) : null}
+                    {supportsColor ? (
+                      <View style={{ flexDirection: 'row', gap: space.md }}>
+                        <View style={{ flex: 1 }}>
+                          <Field label="Color single" keyboardType="decimal-pad" placeholder="10" value={priceA3.colorSingle} onChangeText={(v) => edit(setPriceA3)({ ...priceA3, colorSingle: v })} />
+                        </View>
+                        {supportsDuplex ? (
+                          <View style={{ flex: 1 }}>
+                            <Field label="Color duplex" keyboardType="decimal-pad" placeholder="15" value={priceA3.colorDouble} onChangeText={(v) => edit(setPriceA3)({ ...priceA3, colorDouble: v })} />
+                          </View>
+                        ) : null}
+                      </View>
+                    ) : null}
+                  </>
+                ) : null}
+              </Card>
+            </Section>
+          ) : null}
 
           <Section title="Binding service" footer="Price per order (not per page). Enable types you offer.">
             <Card>
               <SwitchRow first title="Enable binding" subtitle="Book and document binding" value={bindingEnabled} onValueChange={edit(setBindingEnabled)} />
-              <SwitchRow title="Spiral binding" subtitle="Coil or comb binding" value={bindingTypes.spiral} onValueChange={(v) => edit(setBindingTypes)({ ...bindingTypes, spiral: v })} />
-              <SwitchRow title="Perfect binding" subtitle="Glued spine like a book" value={bindingTypes.perfect} onValueChange={(v) => edit(setBindingTypes)({ ...bindingTypes, perfect: v })} />
-              <SwitchRow title="Staple binding" subtitle="Simple stapled pages" value={bindingTypes.staple} onValueChange={(v) => edit(setBindingTypes)({ ...bindingTypes, staple: v })} />
-              <View style={{ flexDirection: 'row', gap: space.md, marginTop: space.sm }}>
-                <View style={{ flex: 1 }}>
-                  <Field label="Spiral (₹)" keyboardType="decimal-pad" value={bindingPrices.spiral} onChangeText={(v) => edit(setBindingPrices)({ ...bindingPrices, spiral: v })} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Field label="Perfect (₹)" keyboardType="decimal-pad" value={bindingPrices.perfect} onChangeText={(v) => edit(setBindingPrices)({ ...bindingPrices, perfect: v })} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Field label="Staple (₹)" keyboardType="decimal-pad" value={bindingPrices.staple} onChangeText={(v) => edit(setBindingPrices)({ ...bindingPrices, staple: v })} />
-                </View>
-              </View>
+              {bindingEnabled ? (
+                <>
+                  <SwitchRow title="Spiral binding" subtitle="Coil or comb binding" value={bindingTypes.spiral} onValueChange={(v) => edit(setBindingTypes)({ ...bindingTypes, spiral: v })} />
+                  {bindingTypes.spiral ? (
+                    <View style={{ marginHorizontal: space.lg, marginBottom: space.sm }}>
+                      <Field label="Spiral (₹)" keyboardType="decimal-pad" placeholder="30" value={bindingPrices.spiral} onChangeText={(v) => edit(setBindingPrices)({ ...bindingPrices, spiral: v })} />
+                    </View>
+                  ) : null}
+                  <SwitchRow title="Perfect binding" subtitle="Glued spine like a book" value={bindingTypes.perfect} onValueChange={(v) => edit(setBindingTypes)({ ...bindingTypes, perfect: v })} />
+                  {bindingTypes.perfect ? (
+                    <View style={{ marginHorizontal: space.lg, marginBottom: space.sm }}>
+                      <Field label="Perfect (₹)" keyboardType="decimal-pad" placeholder="50" value={bindingPrices.perfect} onChangeText={(v) => edit(setBindingPrices)({ ...bindingPrices, perfect: v })} />
+                    </View>
+                  ) : null}
+                  <SwitchRow title="Staple binding" subtitle="Simple stapled pages" value={bindingTypes.staple} onValueChange={(v) => edit(setBindingTypes)({ ...bindingTypes, staple: v })} />
+                  {bindingTypes.staple ? (
+                    <View style={{ marginHorizontal: space.lg, marginBottom: space.sm }}>
+                      <Field label="Staple (₹)" keyboardType="decimal-pad" placeholder="10" value={bindingPrices.staple} onChangeText={(v) => edit(setBindingPrices)({ ...bindingPrices, staple: v })} />
+                    </View>
+                  ) : null}
+                </>
+              ) : null}
             </Card>
           </Section>
 
@@ -414,13 +474,16 @@ export default function ShopScreen() {
               <SwitchRow first title="Lamination" subtitle="Protective plastic coating" value={laminationEnabled} onValueChange={edit(setLaminationEnabled)} />
               {laminationEnabled ? (
                 <View style={{ marginTop: space.sm, marginLeft: space.lg }}>
-                  <View style={{ flexDirection: 'row', gap: space.md }}>
+                  <SwitchRow title="Support A3 lamination" subtitle="Laminate A3 sheets as well as A4" value={laminationMaxSize === 'a3'} onValueChange={(v) => edit(setLaminationMaxSize)(v ? 'a3' : 'a4')} />
+                  <View style={{ flexDirection: 'row', gap: space.md, marginTop: space.xs }}>
                     <View style={{ flex: 1 }}>
-                      <Field label="A4 price (₹)" keyboardType="decimal-pad" value={laminationPrices.a4} onChangeText={(v) => edit(setLaminationPrices)({ ...laminationPrices, a4: v })} />
+                      <Field label="A4 price (₹)" keyboardType="decimal-pad" placeholder="20" value={laminationPrices.a4} onChangeText={(v) => edit(setLaminationPrices)({ ...laminationPrices, a4: v })} />
                     </View>
-                    <View style={{ flex: 1 }}>
-                      <Field label="A3 price (₹)" keyboardType="decimal-pad" value={laminationPrices.a3} onChangeText={(v) => edit(setLaminationPrices)({ ...laminationPrices, a3: v })} />
-                    </View>
+                    {laminationMaxSize === 'a3' ? (
+                      <View style={{ flex: 1 }}>
+                        <Field label="A3 price (₹)" keyboardType="decimal-pad" placeholder="40" value={laminationPrices.a3} onChangeText={(v) => edit(setLaminationPrices)({ ...laminationPrices, a3: v })} />
+                      </View>
+                    ) : null}
                   </View>
                 </View>
               ) : null}
@@ -428,33 +491,50 @@ export default function ShopScreen() {
               <SwitchRow title="Scanning" subtitle="Convert physical to digital" value={scanningEnabled} onValueChange={edit(setScanningEnabled)} />
               {scanningEnabled ? (
                 <View style={{ marginTop: space.sm, marginLeft: space.lg }}>
-                  <Field label="Price per page (₹)" keyboardType="decimal-pad" value={scanningPrice} onChangeText={edit(setScanningPrice)} />
+                  <Field label="Price per page (₹)" keyboardType="decimal-pad" placeholder="5" value={scanningPrice} onChangeText={edit(setScanningPrice)} />
                 </View>
               ) : null}
               
               <SwitchRow title="Photocopying" subtitle="Make copies of documents" value={photocopyingEnabled} onValueChange={edit(setPhotocopyingEnabled)} />
               {photocopyingEnabled ? (
                 <View style={{ marginTop: space.sm, marginLeft: space.lg }}>
+                  <Field label="B&W per page (₹)" keyboardType="decimal-pad" placeholder="2" value={photocopyingPrices.bw} onChangeText={(v) => edit(setPhotocopyingPrices)({ ...photocopyingPrices, bw: v })} />
                   <SwitchRow title="Color available" subtitle="Not just B&W copies" value={photocopyingColor} onValueChange={edit(setPhotocopyingColor)} />
-                  <View style={{ flexDirection: 'row', gap: space.md, marginTop: space.sm }}>
-                    <View style={{ flex: 1 }}>
-                      <Field label="B&W per page (₹)" keyboardType="decimal-pad" value={photocopyingPrices.bw} onChangeText={(v) => edit(setPhotocopyingPrices)({ ...photocopyingPrices, bw: v })} />
+                  {photocopyingColor ? (
+                    <View style={{ marginTop: space.xs }}>
+                      <Field label="Color per page (₹)" keyboardType="decimal-pad" placeholder="10" value={photocopyingPrices.color} onChangeText={(v) => edit(setPhotocopyingPrices)({ ...photocopyingPrices, color: v })} />
                     </View>
-                    <View style={{ flex: 1 }}>
-                      <Field label="Color per page (₹)" keyboardType="decimal-pad" value={photocopyingPrices.color} onChangeText={(v) => edit(setPhotocopyingPrices)({ ...photocopyingPrices, color: v })} />
-                    </View>
-                  </View>
+                  ) : null}
                 </View>
               ) : null}
               
               <SwitchRow title="Plastic files" subtitle="Transparent document folders" value={plasticFilesEnabled} onValueChange={edit(setPlasticFilesEnabled)} />
               {plasticFilesEnabled ? (
                 <View style={{ marginTop: space.sm, marginLeft: space.lg }}>
-                  <Field label="Price per item (₹)" keyboardType="decimal-pad" value={plasticFilesPrice} onChangeText={edit(setPlasticFilesPrice)} />
+                  <Field label="Price per item (₹)" keyboardType="decimal-pad" placeholder="10" value={plasticFilesPrice} onChangeText={edit(setPlasticFilesPrice)} />
+                </View>
+              ) : null}
+            </Card>
+          </Section>
+
+          <Section title="Delivery channels" footer="Enable home delivery options for your shop.">
+            <Card>
+              <SwitchRow first title="Shop local delivery" subtitle="Your own rider delivers within your area" value={deliverySelfEnabled} onValueChange={edit(setDeliverySelfEnabled)} />
+              {deliverySelfEnabled ? (
+                <View style={{ marginTop: space.sm, marginLeft: space.lg }}>
+                  <View style={{ flexDirection: 'row', gap: space.md, marginBottom: space.sm }}>
+                    <View style={{ flex: 1 }}>
+                      <Field label="Radius (km)" keyboardType="decimal-pad" placeholder="3" value={deliveryRadius} onChangeText={edit(setDeliveryRadius)} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Field label="Fee (₹)" keyboardType="decimal-pad" placeholder="30" value={deliveryFee} onChangeText={edit(setDeliveryFee)} />
+                    </View>
+                  </View>
+                  <Field label="Typical delivery time (mins)" keyboardType="number-pad" placeholder="120" value={deliveryEta} onChangeText={edit(setDeliveryEta)} />
                 </View>
               ) : null}
               
-              <SwitchRow title="Delivery" subtitle="Deliver orders to customers" value={deliveryEnabled} onValueChange={edit(setDeliveryEnabled)} />
+              <SwitchRow title="Shiprocket courier" subtitle="Courier collects from your shop for delivery" value={deliveryCourierEnabled} onValueChange={edit(setDeliveryCourierEnabled)} />
             </Card>
           </Section>
 
