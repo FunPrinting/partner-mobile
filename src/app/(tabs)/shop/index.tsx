@@ -1,8 +1,8 @@
 import * as Location from 'expo-location';
+import * as Linking from 'expo-linking';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Alert, Pressable, Text, View } from 'react-native';
-import MapView, { Marker } from 'react-native-maps';
+import { Alert, Platform, Pressable, Text, View } from 'react-native';
 import { Banner, Body, Button, Card, Field, Icon, Row, Screen, Section, Stat, SwitchRow } from '@/components/ui';
 import { api } from '@/lib/session';
 import { space, type, useTheme } from '@/theme';
@@ -559,18 +559,57 @@ export default function ShopScreen() {
             </Card>
           </Section>
 
-          <Section title="Location" footer="Tap the map or drag the pin to your shop's entrance.">
-            <Card style={{ padding: 0 }}>
-              <MapView
-                style={{ height: 260 }}
-                region={{ ...location, latitudeDelta: 0.01, longitudeDelta: 0.01 }}
-                onPress={(e) => edit(setLocation)(e.nativeEvent.coordinate)}
-                accessibilityLabel="Shop location map"
-              >
-                <Marker coordinate={location} draggable onDragEnd={(e) => edit(setLocation)(e.nativeEvent.coordinate)} />
-              </MapView>
-              <View style={{ padding: space.md }}>
-                <Button variant="secondary" title="Use my current location" icon={{ ios: 'location.fill', android: 'my_location' }} onPress={useGps} loading={locating} />
+          <Section title="Shop location" footer="Your coordinates place your shop for nearby customers. Tap 'Use GPS' while at your shop's entrance.">
+            <Card>
+              <View style={{ flexDirection: 'row', gap: space.md, marginBottom: space.sm }}>
+                <View style={{ flex: 1 }}>
+                  <Field
+                    label="Latitude"
+                    keyboardType="numeric"
+                    placeholder="28.6139"
+                    value={String(location.latitude)}
+                    onChangeText={(v) => {
+                      const n = parseFloat(v);
+                      if (Number.isFinite(n)) edit(setLocation)({ ...location, latitude: n });
+                    }}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Field
+                    label="Longitude"
+                    keyboardType="numeric"
+                    placeholder="77.2090"
+                    value={String(location.longitude)}
+                    onChangeText={(v) => {
+                      const n = parseFloat(v);
+                      if (Number.isFinite(n)) edit(setLocation)({ ...location, longitude: n });
+                    }}
+                  />
+                </View>
+              </View>
+
+              <View style={{ gap: space.sm, marginTop: space.xs }}>
+                <Button
+                  variant="secondary"
+                  title="Use my current GPS location"
+                  icon={{ ios: 'location.fill', android: 'my_location' }}
+                  onPress={useGps}
+                  loading={locating}
+                />
+                <Button
+                  variant="plain"
+                  title="View on Google / Apple Maps"
+                  icon={{ ios: 'map.fill', android: 'map' }}
+                  onPress={() => {
+                    const url = Platform.select({
+                      ios: `maps:0,0?q=${location.latitude},${location.longitude}`,
+                      android: `geo:${location.latitude},${location.longitude}?q=${location.latitude},${location.longitude}(${encodeURIComponent(profile?.businessName || 'Shop')})`,
+                    }) ?? `https://www.google.com/maps/search/?api=1&query=${location.latitude},${location.longitude}`;
+                    Linking.openURL(url).catch(() => {
+                      Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${location.latitude},${location.longitude}`);
+                    });
+                  }}
+                />
               </View>
             </Card>
           </Section>

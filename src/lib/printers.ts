@@ -23,32 +23,85 @@ import { isWholeFile, planRuns } from './runs';
 const IPP_TIMEOUT_MS = 30_000;
 const JOB_WAIT_MS = 10 * 60_000;
 
-async function ippCall(httpUrl: string, body: Uint8Array<ArrayBuffer>, timeoutMs = IPP_TIMEOUT_MS) {
-  let res;
+async function doFetch(url: string, body: Uint8Array<ArrayBuffer>, timeoutMs: number) {
   try {
-    res = await expoFetch(httpUrl, {
+    return await expoFetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/ipp', Accept: 'application/ipp' },
       body,
       signal: AbortSignal.timeout(timeoutMs),
     });
-  } catch {
-    throw new Error('Printer not reachable. Check it is on and on the same Wi-Fi as this phone.');
+  } catch (expoErr) {
+    if (typeof globalThis.fetch === 'function') {
+      try {
+        return await globalThis.fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/ipp', Accept: 'application/ipp' },
+          body: body as any,
+          signal: AbortSignal.timeout(timeoutMs),
+        });
+      } catch {
+        // Fall back to original error
+      }
+    }
+    throw expoErr;
+  }
+}
+
+async function ippCall(httpUrl: string, body: Uint8Array<ArrayBuffer>, timeoutMs = IPP_TIMEOUT_MS) {
+  let res;
+  try {
+    res = await doFetch(httpUrl, body, timeoutMs);
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    throw new Error(
+      `Printer not reachable (${detail}). If a VPN or Private DNS is active on this phone, please turn it off or enable local network bypass to reach 192.168.x.x.`
+    );
   }
   if (res.status === 426) {
     // The printer only accepts encrypted IPP with its own certificate, which a phone app cannot verify
     throw new Error('This printer only accepts secure connections from computers. Print its orders from the desktop app.');
   }
   if (!res.ok) throw new Error(`Printer answered HTTP ${res.status}`);
-  return ipp.decodeResponse(await res.bytes());
+  const bytes = typeof res.bytes === 'function' ? await res.bytes() : new Uint8Array(await res.arrayBuffer());
+  return ipp.decodeResponse(bytes);
 }
 
 /** Reads the printer's name, state and capabilities (prints nothing). */
 export async function checkIppPrinter(address: string) {
   const urls = ipp.printerUrls(address);
-  const res = await ippCall(urls.http, ipp.printerAttributesRequest(urls.ipp), 8000);
-  if (!ipp.isSuccess(res.statusCode)) throw new Error(`Printer refused: ${ipp.statusText(res.statusCode)}`);
-  return { summary: ipp.printerSummary(res), caps: ipp.capsFrom(res), uuid: ipp.printerUuid(res), urls };
+
+  // Candidate paths to test: requested path first, followed by common printer endpoints
+  const cleanHttp = urls.http.replace(/\/(ipp\/print|ipp\/printer|printers\/ipp)?\/?$/, '');
+  const cleanIpp = urls.ipp.replace(/\/(ipp\/print|ipp\/printer|printers\/ipp)?\/?$/, '');
+  const candidates: Array<{ http: string; ipp: string }> = [
+    urls,
+    { http: `${cleanHttp}/ipp/print`, ipp: `${cleanIpp}/ipp/print` },
+    { http: `${cleanHttp}/ipp/printer`, ipp: `${cleanIpp}/ipp/printer` },
+    { http: `${cleanHttp}/printers/ipp`, ipp: `${cleanIpp}/printers/ipp` },
+    { http: `${cleanHttp}/`, ipp: `${cleanIpp}/` },
+  ];
+
+  const seen = new Set<string>();
+  const unique = candidates.filter((c) => {
+    if (seen.has(c.http)) return false;
+    seen.add(c.http);
+    return true;
+  });
+
+  let lastError: Error | null = null;
+  for (const candidate of unique) {
+    try {
+      const res = await ippCall(candidate.http, ipp.printerAttributesRequest(candidate.ipp), 5000);
+      if (ipp.isSuccess(res.statusCode)) {
+        return { summary: ipp.printerSummary(res), caps: ipp.capsFrom(res), uuid: ipp.printerUuid(res), urls: candidate };
+      }
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+    }
+  }
+
+  throw lastError || new Error('Printer not reachable. Check it is on and on the same Wi-Fi as this phone.');
 }
 
 /** iOS: pick an AirPrint printer once; later jobs print to it without a dialog. */

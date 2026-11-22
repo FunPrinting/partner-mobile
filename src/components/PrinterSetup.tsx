@@ -32,8 +32,8 @@ async function readPrinter(address: string, uuid?: string): Promise<{ entry: Ipp
     return {
       error: {
         tone: 'danger',
-        title: `${summary.name} can't take PDFs over Wi-Fi`,
-        text: 'Orders it cannot print stay for your shop computer, which can drive it with its own driver.',
+        title: `${summary.name} needs driver rasterization`,
+        text: 'This printer cannot process raw PDFs directly over IPP. Tap "Use the system print dialog" below to print to it using Android\'s print service, or print from your shop computer.',
       },
     };
   }
@@ -139,7 +139,7 @@ export default function PrinterSetup() {
         </Card>
       </Section>
 
-      <Section title="Add a printer" footer="Search finds Wi-Fi printers that announce themselves (almost every printer made since about 2015). If yours is not listed, type its address.">
+      <Section title="Add a printer" footer="Search finds Wi-Fi printers on your local network. Important: If a VPN or Private DNS is active on this phone, turn it off so local Wi-Fi devices (192.168.x.x) can be reached.">
         <Card>
           {canSearch ? <Button variant="secondary" title={searched ? 'Search again' : 'Find Wi-Fi printers'} onPress={search} loading={busy === 'search'} /> : <Body tone="tertiary">Searching needs the installed app (it is not available in Expo Go).</Body>}
           {searched && fresh.length === 0 && busy !== 'search' ? <Body tone="tertiary">No new printers found. Check the printer is on and on this Wi-Fi.</Body> : null}
