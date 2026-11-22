@@ -4,6 +4,8 @@
  */
 import type { RouterPrinter } from './router.ts';
 
+export type PageScaling = 'fit' | 'shrink' | 'none' | 'fill';
+
 type Base = { id: string; name: string; enabled: boolean; preferredBw: boolean };
 export type IppPrinter = Base & {
   kind: 'ipp';
@@ -21,8 +23,8 @@ export type IppPrinter = Base & {
   dpi?: 200 | 300 | 600;
   /** Prints pages in LIFO stack order (Page N down to Page 1) for face-up inkjet output trays (default true). */
   reverseOrder?: boolean;
-  /** Page scaling mode: 'fit' (Fit to printable area, recommended) or 'none' (100% Actual size). */
-  scaling?: 'fit' | 'none';
+  /** Page scaling mode: 'fit' (Fit Printable), 'shrink' (Shrink Oversized), 'none' (100% Actual Size), or 'fill' (Fit Paper). */
+  scaling?: PageScaling;
 };
 export type AirPrintPrinter = Base & { kind: 'airprint'; url: string };
 export type DialogPrinter = Base & { kind: 'dialog' };
@@ -109,8 +111,8 @@ export function setPrinterReverseOrder(list: PrinterEntry[], id: string, reverse
   return list.map((p) => (p.id === id && p.kind === 'ipp' ? { ...p, reverseOrder } : p));
 }
 
-/** Updates the page scaling mode for a printer ('fit' = Fit to printable area, 'none' = Actual size 100%). */
-export function setPrinterScaling(list: PrinterEntry[], id: string, scaling: 'fit' | 'none'): PrinterEntry[] {
+/** Updates the page scaling mode for a printer ('fit' | 'shrink' | 'none' | 'fill'). */
+export function setPrinterScaling(list: PrinterEntry[], id: string, scaling: PageScaling): PrinterEntry[] {
   return list.map((p) => (p.id === id && p.kind === 'ipp' ? { ...p, scaling } : p));
 }
 

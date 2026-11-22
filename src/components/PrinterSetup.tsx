@@ -24,7 +24,16 @@ function abilities(p: PrinterEntry): string {
   const isRaster = !p.formats.includes('application/pdf') && p.formats.includes('image/pwg-raster');
   const dpiText = p.kind === 'ipp' ? `${p.dpi || 300} DPI` : '';
   const orderText = p.kind === 'ipp' && p.reverseOrder === false ? '1→N' : 'LIFO';
-  const scaleText = p.kind === 'ipp' && p.scaling === 'none' ? '100% 1:1' : 'Fit';
+  const scaleText =
+    p.kind === 'ipp'
+      ? p.scaling === 'none'
+        ? '100% Actual'
+        : p.scaling === 'shrink'
+          ? 'Shrink Over'
+          : p.scaling === 'fill'
+            ? 'Fit Paper'
+            : 'Fit Printable'
+      : '';
   const out = [
     p.colorModes.length ? (p.colorModes.includes('color') ? 'Colour' : 'B&W only') : '',
     p.sides.length ? (p.sides.some((s) => s.startsWith('two-sided')) ? 'Double-sided' : 'Single-sided') : '',
@@ -196,8 +205,10 @@ export default function PrinterSetup() {
                     <Body tone="secondary">Page Scaling</Body>
                     <View style={{ flexDirection: 'row', gap: space.xs, flexWrap: 'wrap' }}>
                       {([
-                        { val: 'fit', label: 'Fit to Printable Area' },
+                        { val: 'fit', label: 'Fit Printable (Safe)' },
+                        { val: 'shrink', label: 'Shrink Oversized' },
                         { val: 'none', label: '100% Actual Size' },
+                        { val: 'fill', label: 'Fit Paper (Fill)' },
                       ] as const).map((opt) => {
                         const isSelected = (p.scaling || 'fit') === opt.val;
                         return (

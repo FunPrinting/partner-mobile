@@ -213,34 +213,70 @@ object PwgRasterEncoder {
         bitmap.eraseColor(Color.WHITE)
 
         val matrix = android.graphics.Matrix()
-        if (scaling.equals("none", ignoreCase = true)) {
-          // 1:1 Scale (Actual Size): 1 pt = dpi / 72 pixels, centered on sheet
-          val scale = dpi / 72f
-          val renderedW = docWidthPt * scale
-          val renderedH = docHeightPt * scale
-          val offsetX = (mediaWidthPx - renderedW) / 2f
-          val offsetY = (mediaHeightPx - renderedH) / 2f
-          matrix.postScale(scale, scale)
-          matrix.postTranslate(offsetX, offsetY)
-        } else {
-          // "fit": Scale to Printable Area
-          // Hardware non-printable margins for consumer Wi-Fi inkjets (e.g. Epson L3250) are ~3mm (8.5 pt)
-          val marginPt = 8.5039f // 3 mm in points
-          val marginPx = Math.round(marginPt * dpi / 72f)
-          val availWidthPx = (mediaWidthPx - 2 * marginPx).coerceAtLeast(1)
-          val availHeightPx = (mediaHeightPx - 2 * marginPx).coerceAtLeast(1)
+        when (scaling.lowercase()) {
+          "none" -> {
+            // 1:1 Scale (Actual Size 100%): 1 pt = dpi / 72 pixels, centered on sheet
+            val scale = dpi / 72f
+            val renderedW = docWidthPt * scale
+            val renderedH = docHeightPt * scale
+            val offsetX = (mediaWidthPx - renderedW) / 2f
+            val offsetY = (mediaHeightPx - renderedH) / 2f
+            matrix.postScale(scale, scale)
+            matrix.postTranslate(offsetX, offsetY)
+          }
+          "shrink" -> {
+            // Shrink Oversized: only downscales if page exceeds printable area, keeps 100% actual size otherwise
+            val marginPt = 8.5039f // 3 mm in points
+            val marginPx = Math.round(marginPt * dpi / 72f)
+            val availWidthPx = (mediaWidthPx - 2 * marginPx).coerceAtLeast(1)
+            val availHeightPx = (mediaHeightPx - 2 * marginPx).coerceAtLeast(1)
 
-          val scaleX = availWidthPx.toFloat() / (docWidthPt * dpi / 72f)
-          val scaleY = availHeightPx.toFloat() / (docHeightPt * dpi / 72f)
-          val fitRatio = Math.min(scaleX, scaleY)
-          val finalScale = (dpi / 72f) * fitRatio
+            val scaleX = availWidthPx.toFloat() / (docWidthPt * dpi / 72f)
+            val scaleY = availHeightPx.toFloat() / (docHeightPt * dpi / 72f)
+            val fitRatio = Math.min(1.0f, Math.min(scaleX, scaleY))
+            val finalScale = (dpi / 72f) * fitRatio
 
-          val renderedW = docWidthPt * finalScale
-          val renderedH = docHeightPt * finalScale
-          val offsetX = (mediaWidthPx - renderedW) / 2f
-          val offsetY = (mediaHeightPx - renderedH) / 2f
-          matrix.postScale(finalScale, finalScale)
-          matrix.postTranslate(offsetX, offsetY)
+            val renderedW = docWidthPt * finalScale
+            val renderedH = docHeightPt * finalScale
+            val offsetX = (mediaWidthPx - renderedW) / 2f
+            val offsetY = (mediaHeightPx - renderedH) / 2f
+            matrix.postScale(finalScale, finalScale)
+            matrix.postTranslate(offsetX, offsetY)
+          }
+          "fill" -> {
+            // Fit Paper (Fill / Bleed): scales uniformly to cover entire physical sheet edge-to-edge
+            val paperScaleX = mediaWidthPx.toFloat() / (docWidthPt * dpi / 72f)
+            val paperScaleY = mediaHeightPx.toFloat() / (docHeightPt * dpi / 72f)
+            val fillRatio = Math.max(paperScaleX, paperScaleY)
+            val finalScale = (dpi / 72f) * fillRatio
+
+            val renderedW = docWidthPt * finalScale
+            val renderedH = docHeightPt * finalScale
+            val offsetX = (mediaWidthPx - renderedW) / 2f
+            val offsetY = (mediaHeightPx - renderedH) / 2f
+            matrix.postScale(finalScale, finalScale)
+            matrix.postTranslate(offsetX, offsetY)
+          }
+          else -> {
+            // "fit": Fit to Printable Area (default & safe for documents)
+            // Hardware non-printable margins for consumer Wi-Fi inkjets (e.g. Epson L3250) are ~3mm (8.5 pt)
+            val marginPt = 8.5039f // 3 mm in points
+            val marginPx = Math.round(marginPt * dpi / 72f)
+            val availWidthPx = (mediaWidthPx - 2 * marginPx).coerceAtLeast(1)
+            val availHeightPx = (mediaHeightPx - 2 * marginPx).coerceAtLeast(1)
+
+            val scaleX = availWidthPx.toFloat() / (docWidthPt * dpi / 72f)
+            val scaleY = availHeightPx.toFloat() / (docHeightPt * dpi / 72f)
+            val fitRatio = Math.min(scaleX, scaleY)
+            val finalScale = (dpi / 72f) * fitRatio
+
+            val renderedW = docWidthPt * finalScale
+            val renderedH = docHeightPt * finalScale
+            val offsetX = (mediaWidthPx - renderedW) / 2f
+            val offsetY = (mediaHeightPx - renderedH) / 2f
+            matrix.postScale(finalScale, finalScale)
+            matrix.postTranslate(offsetX, offsetY)
+          }
         }
 
         page.render(bitmap, null, matrix, PdfRenderer.Page.RENDER_MODE_FOR_PRINT)

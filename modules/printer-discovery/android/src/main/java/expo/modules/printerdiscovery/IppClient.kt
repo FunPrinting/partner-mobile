@@ -416,9 +416,12 @@ object IppClient {
     writeAttr(bb, 0x44, "media", mediaKeyword)
 
     // Standard IPP print-scaling keyword (PWG 5100.16)
-    // "fit": fits entirely within printable area without cropping or over-scaling
-    // "none": exact 1:1 scale (no hardware/firmware scaling)
-    val scalingKeyword = if (scaling.equals("none", ignoreCase = true)) "none" else "fit"
+    val scalingKeyword = when (scaling.lowercase()) {
+      "none" -> "none"
+      "shrink" -> "auto-fit"
+      "fill" -> "fill"
+      else -> "fit"
+    }
     writeAttr(bb, 0x44, "print-scaling", scalingKeyword)
 
     // End tag

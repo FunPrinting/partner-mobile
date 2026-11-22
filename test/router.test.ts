@@ -136,8 +136,11 @@ test('summarySlip preserves setting in migrateSettings', () => {
 
 test('scaling setting updates entry and upsert preserves it', () => {
   const p: PrinterEntry = { ...ipp, id: 'p1', scaling: 'fit' };
-  const updated = setPrinterScaling([p], 'p1', 'none');
-  assert.equal((updated[0] as IppPrinter).scaling, 'none');
+  const updated = setPrinterScaling([p], 'p1', 'shrink');
+  assert.equal((updated[0] as IppPrinter).scaling, 'shrink');
   const refreshed = upsertPrinter(updated, { ...ipp, id: 'p1', address: 'ipp://10.0.0.50:631/ipp/print' });
-  assert.equal((refreshed[0] as IppPrinter).scaling, 'none');
+  assert.equal((refreshed[0] as IppPrinter).scaling, 'shrink');
+
+  const fillUpdated = setPrinterScaling(refreshed, 'p1', 'fill');
+  assert.equal((fillUpdated[0] as IppPrinter).scaling, 'fill');
 });

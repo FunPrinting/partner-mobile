@@ -33,8 +33,8 @@ export type PrintRasterOptions = {
   dpi?: number;
   /** Prints pages in LIFO stack order (Page N down to Page 1) for face-up inkjet output trays. */
   reverseOrder?: boolean;
-  /** Page scaling mode: 'fit' (Fit to printable area, recommended) or 'none' (100% Actual size). */
-  scaling?: 'fit' | 'none';
+  /** Page scaling mode: 'fit' | 'shrink' | 'none' | 'fill'. */
+  scaling?: 'fit' | 'shrink' | 'none' | 'fill';
 };
 
 export type PrintRasterResult = {
