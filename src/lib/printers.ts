@@ -15,6 +15,7 @@
 import { fetch as expoFetch } from 'expo/fetch';
 import { Directory, File, Paths } from 'expo-file-system';
 import * as Print from 'expo-print';
+import { isAvailable, probePrinter, sendIpp, printRaster } from '../../modules/printer-discovery';
 import * as ipp from './ipp';
 import type { JobFile } from './jobLogic';
 import type { PrinterEntry } from './printerModel';
@@ -24,6 +25,21 @@ const IPP_TIMEOUT_MS = 30_000;
 const JOB_WAIT_MS = 10 * 60_000;
 
 async function doFetch(url: string, body: Uint8Array<ArrayBuffer>, timeoutMs: number) {
+  if (isAvailable) {
+    try {
+      const nativeRes = await sendIpp(url, body);
+      if (nativeRes) {
+        return {
+          status: nativeRes.status,
+          ok: nativeRes.status >= 200 && nativeRes.status <= 299,
+          bytes: async () => nativeRes.bytes,
+          arrayBuffer: async () => nativeRes.bytes.buffer,
+        };
+      }
+    } catch {
+      // Fall through to expoFetch/fetch
+    }
+  }
   try {
     return await expoFetch(url, {
       method: 'POST',
@@ -69,12 +85,37 @@ async function ippCall(httpUrl: string, body: Uint8Array<ArrayBuffer>, timeoutMs
 
 /** Reads the printer's name, state and capabilities (prints nothing). */
 export async function checkIppPrinter(address: string) {
+  // Proactive native probe: handles self-signed TLS certs and automatic 426 HTTP->HTTPS upgrade
+  if (isAvailable) {
+    try {
+      const probed = await probePrinter(address);
+      if (probed && probed.success) {
+        const summary = {
+          name: probed.name,
+          state: probed.state,
+          reasons: [],
+          accepting: probed.accepting,
+        };
+        const caps = {
+          formats: probed.formats,
+          sides: probed.sides,
+          colorModes: probed.colorModes,
+          media: probed.media,
+        };
+        const urls = ipp.printerUrls(probed.resolvedUrl);
+        return { summary, caps, uuid: probed.uuid, urls };
+      }
+    } catch {
+      // Fall through to manual candidate probing
+    }
+  }
+
   const urls = ipp.printerUrls(address);
 
   // Candidate paths to test: requested path first, followed by common printer endpoints
   const cleanHttp = urls.http.replace(/\/(ipp\/print|ipp\/printer|printers\/ipp)?\/?$/, '');
   const cleanIpp = urls.ipp.replace(/\/(ipp\/print|ipp\/printer|printers\/ipp)?\/?$/, '');
-  const candidates: Array<{ http: string; ipp: string }> = [
+  const candidates: { http: string; ipp: string }[] = [
     urls,
     { http: `${cleanHttp}/ipp/print`, ipp: `${cleanIpp}/ipp/print` },
     { http: `${cleanHttp}/ipp/printer`, ipp: `${cleanIpp}/ipp/printer` },
@@ -169,25 +210,43 @@ export async function printFile(printer: PrinterEntry, file: File, opts: JobFile
       // keep the server's page count; the file is sent whole below
     }
     const runs = planRuns({ pageCount: pages, colour: opts.color ?? 'bw', colorPages: opts.colorPages, duplex: opts.sided === 'double', copies: opts.copies ?? 1 });
+    const isRasterPrinter = !caps.formats.includes('application/pdf') && caps.formats.includes('image/pwg-raster');
+
     for (let i = 0; i < runs.length; i++) {
       const run = runs[i];
       const part = runs.length > 1 ? `part ${i + 1} of ${runs.length} (${run.colour === 'color' ? 'colour' : 'B&W'})` : '';
       onStatus(part ? `Sending ${part}…` : 'Sending to printer…');
-      const data = isWholeFile(run, pages) ? bytes : await extractPages(bytes, run.pages);
-      const res = await ippCall(
-        urls.http,
-        ipp.printJobRequest({
-          printerUri: urls.ipp,
+
+      if (isRasterPrinter && isAvailable) {
+        // Option A: In-App Direct Host (Native PWG Raster Engine)
+        const rasterRes = await printRaster(urls.http, file.uri, {
+          copies: run.copies,
+          sided: opts.sided,
+          color: run.colour,
+          pageSize: opts.pageSize,
           jobName: runs.length > 1 ? `${jobName} (${i + 1}/${runs.length})` : jobName,
-          format: 'application/pdf',
-          jobAttrs: ipp.jobAttributes({ copies: run.copies, sided: opts.sided, color: run.colour, pageSize: opts.pageSize }, caps),
-          data: data as Uint8Array<ArrayBuffer>,
-        }),
-        120_000
-      );
-      if (!ipp.isSuccess(res.statusCode)) throw new Error(`Printer refused the job: ${ipp.statusText(res.statusCode)}`);
-      const printerJobId = Number(res.groups.job?.['job-id']?.[0] ?? 0);
-      if (printerJobId) await waitForIppJob(urls, printerJobId, (s) => onStatus(part ? `${s} ${part}` : s));
+          pages: isWholeFile(run, pages) ? undefined : run.pages,
+        });
+        if (rasterRes.jobId) {
+          await waitForIppJob(urls, rasterRes.jobId, (s) => onStatus(part ? `${s} ${part}` : s));
+        }
+      } else {
+        const data = isWholeFile(run, pages) ? bytes : await extractPages(bytes, run.pages);
+        const res = await ippCall(
+          urls.http,
+          ipp.printJobRequest({
+            printerUri: urls.ipp,
+            jobName: runs.length > 1 ? `${jobName} (${i + 1}/${runs.length})` : jobName,
+            format: 'application/pdf',
+            jobAttrs: ipp.jobAttributes({ copies: run.copies, sided: opts.sided, color: run.colour, pageSize: opts.pageSize }, caps),
+            data: data as Uint8Array<ArrayBuffer>,
+          }),
+          120_000
+        );
+        if (!ipp.isSuccess(res.statusCode)) throw new Error(`Printer refused the job: ${ipp.statusText(res.statusCode)}`);
+        const printerJobId = Number(res.groups.job?.['job-id']?.[0] ?? 0);
+        if (printerJobId) await waitForIppJob(urls, printerJobId, (s) => onStatus(part ? `${s} ${part}` : s));
+      }
     }
     return;
   }

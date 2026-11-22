@@ -21,19 +21,28 @@ type Message = { tone: 'success' | 'danger' | 'info'; title: string; text?: stri
 function abilities(p: PrinterEntry): string {
   if (p.kind === 'dialog') return 'Asks you to confirm each file';
   if (p.kind === 'airprint') return 'AirPrint · uses the printer\'s own settings';
-  const out = [p.colorModes.length ? (p.colorModes.includes('color') ? 'Colour' : 'B&W only') : '', p.sides.length ? (p.sides.some((s) => s.startsWith('two-sided')) ? 'Double-sided' : 'Single-sided') : '', p.media.includes('iso_a3_297x420mm') ? 'A3' : ''];
+  const isRaster = !p.formats.includes('application/pdf') && p.formats.includes('image/pwg-raster');
+  const out = [
+    p.colorModes.length ? (p.colorModes.includes('color') ? 'Colour' : 'B&W only') : '',
+    p.sides.length ? (p.sides.some((s) => s.startsWith('two-sided')) ? 'Double-sided' : 'Single-sided') : '',
+    p.media.includes('iso_a3_297x420mm') ? 'A3' : '',
+    isRaster ? 'Direct Host' : '',
+  ];
   return out.filter(Boolean).join(' · ') || 'Wi-Fi';
 }
 
 /** Reads a printer's properties over IPP and returns the entry to save, or explains why not. */
 async function readPrinter(address: string, uuid?: string): Promise<{ entry: IppPrinter } | { error: Message }> {
   const { summary, caps, uuid: reported, urls } = await checkIppPrinter(address);
-  if (!caps.formats.includes('application/pdf')) {
+  const supportsPdf = caps.formats.includes('application/pdf');
+  const supportsPwg = caps.formats.includes('image/pwg-raster');
+
+  if (!supportsPdf && !supportsPwg) {
     return {
       error: {
         tone: 'danger',
-        title: `${summary.name} needs driver rasterization`,
-        text: 'This printer cannot process raw PDFs directly over IPP. Tap "Use the system print dialog" below to print to it using Android\'s print service, or print from your shop computer.',
+        title: `${summary.name} format unsupported`,
+        text: 'This printer cannot process raw PDFs or PWG raster over IPP. Tap "Use the system print dialog" below to print to it using Android\'s print service, or print from your shop computer.',
       },
     };
   }

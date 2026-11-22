@@ -43,7 +43,7 @@ export function routerPrinter(p: PrinterEntry): RouterPrinter {
     enabled: p.enabled,
     preferredBw: p.preferredBw,
     caps: {
-      pdf: p.formats.length ? p.formats.includes('application/pdf') : undefined,
+      pdf: p.formats.length ? (p.formats.includes('application/pdf') || p.formats.includes('image/pwg-raster')) : undefined,
       color: p.colorModes.length ? p.colorModes.includes('color') : undefined,
       duplex: p.sides.length ? p.sides.some((s) => s.startsWith('two-sided')) : undefined,
       a3: p.media.length ? p.media.includes(A3) : undefined,

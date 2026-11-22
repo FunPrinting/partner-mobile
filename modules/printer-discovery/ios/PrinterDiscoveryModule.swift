@@ -16,6 +16,22 @@ public final class PrinterDiscoveryModule: Module {
       }
       scan.start()
     }
+
+    AsyncFunction("probePrinter") { (_: String, promise: Promise) in
+      promise.reject("UNSUPPORTED", "probePrinter is Android-specific; iOS uses AirPrint")
+    }
+
+    AsyncFunction("sendIpp") { (_: String, _: String, promise: Promise) in
+      promise.reject("UNSUPPORTED", "sendIpp is Android-specific")
+    }
+
+    AsyncFunction("printRaster") { (_: String, _: String, _: [String: Any], promise: Promise) in
+      promise.reject("UNSUPPORTED", "printRaster is Android-specific; iOS uses AirPrint")
+    }
+
+    AsyncFunction("getJobStatus") { (_: String, _: Int, promise: Promise) in
+      promise.reject("UNSUPPORTED", "getJobStatus is Android-specific")
+    }
   }
 }
 

@@ -7,6 +7,7 @@ import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.util.Base64
 import expo.modules.kotlin.Promise
 import expo.modules.kotlin.exception.Exceptions
 import expo.modules.kotlin.modules.Module
@@ -14,11 +15,8 @@ import expo.modules.kotlin.modules.ModuleDefinition
 import java.util.ArrayDeque
 
 /**
- * Finds IPP printers on the local network (Bonjour / mDNS service types _ipp._tcp and
- * _ipps._tcp) with Android's NsdManager.
- *
- * scan(timeoutMs) resolves with one record per service found:
- *   { name, type: "ipp" | "ipps", port, addresses: string[], txt: { key: value } }
+ * Finds IPP printers on the local network (Bonjour / mDNS service types _ipp._tcp and _ipps._tcp)
+ * and provides native in-app raster printing (PWG Raster 5102.4) and IPPS TLS communication.
  */
 class PrinterDiscoveryModule : Module() {
   private val context: Context
@@ -29,6 +27,57 @@ class PrinterDiscoveryModule : Module() {
 
     AsyncFunction("scan") { timeoutMs: Int, promise: Promise ->
       Scan(context, timeoutMs.toLong().coerceIn(1000, 15000)) { promise.resolve(it) }.start()
+    }
+
+    AsyncFunction("probePrinter") { address: String, promise: Promise ->
+      Thread {
+        try {
+          val res = IppClient.probePrinter(address)
+          promise.resolve(res)
+        } catch (e: Exception) {
+          promise.reject("PROBE_FAILED", e.message ?: "Printer probe failed", e)
+        }
+      }.start()
+    }
+
+    AsyncFunction("sendIpp") { url: String, requestBase64: String, promise: Promise ->
+      Thread {
+        try {
+          val reqBytes = Base64.decode(requestBase64, Base64.DEFAULT)
+          val (code, respBytes) = IppClient.sendIpp(url, reqBytes)
+          val respBase64 = Base64.encodeToString(respBytes, Base64.NO_WRAP)
+          promise.resolve(
+            mapOf(
+              "status" to code,
+              "responseBase64" to respBase64
+            )
+          )
+        } catch (e: Exception) {
+          promise.reject("IPP_SEND_FAILED", e.message ?: "IPP request failed", e)
+        }
+      }.start()
+    }
+
+    AsyncFunction("printRaster") { printerUrl: String, pdfUri: String, options: Map<String, Any?>, promise: Promise ->
+      Thread {
+        try {
+          val res = IppClient.printRaster(context, printerUrl, pdfUri, options)
+          promise.resolve(res)
+        } catch (e: Exception) {
+          promise.reject("RASTER_PRINT_FAILED", e.message ?: "Raster printing failed", e)
+        }
+      }.start()
+    }
+
+    AsyncFunction("getJobStatus") { printerUrl: String, jobId: Int, promise: Promise ->
+      Thread {
+        try {
+          val res = IppClient.getJobStatus(printerUrl, jobId)
+          promise.resolve(res)
+        } catch (e: Exception) {
+          promise.reject("JOB_STATUS_FAILED", e.message ?: "Get job status failed", e)
+        }
+      }.start()
     }
   }
 }
@@ -50,14 +99,12 @@ private class Scan(
   fun start() {
     main.post {
       try {
-        // Without this lock many phones drop incoming multicast packets and see nothing
         val wifi = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
         lock = wifi.createMulticastLock("funprinting-printer-discovery").apply {
           setReferenceCounted(false)
           acquire()
         }
       } catch (_: Exception) {
-        // Discovery may still work without it
       }
       for (type in listOf("_ipp._tcp", "_ipps._tcp")) {
         val listener = object : NsdManager.DiscoveryListener {
@@ -79,14 +126,12 @@ private class Scan(
         try {
           nsd.discoverServices(type, NsdManager.PROTOCOL_DNS_SD, listener)
         } catch (_: Exception) {
-          // this type cannot be browsed right now
         }
       }
       main.postDelayed({ finish() }, timeoutMs)
     }
   }
 
-  // Android resolves one service at a time
   private fun resolveNext() {
     if (resolving || finished) return
     val info = pending.poll() ?: return
@@ -123,7 +168,6 @@ private class Scan(
       @Suppress("DEPRECATION")
       info.host?.hostAddress?.let(addresses::add)
     }
-    // Link-local addresses (fe80::) are no use outside this interface
     val usable = addresses.map { it.substringBefore('%') }.filter { !it.startsWith("fe80:") && !it.startsWith("169.254.") }
     val txt = HashMap<String, String>()
     for ((k, v) in info.attributes) txt[k] = if (v == null) "" else String(v, Charsets.UTF_8)
@@ -144,7 +188,6 @@ private class Scan(
       try {
         nsd.stopServiceDiscovery(l)
       } catch (_: Exception) {
-        // not started or already stopped
       }
     }
     try {
