@@ -1,6 +1,7 @@
 import * as WebBrowser from 'expo-web-browser';
 import { useState } from 'react';
 import { Alert, Platform, View } from 'react-native';
+import { requestNotificationPermission } from '../../../../modules/printer-discovery';
 import PrinterSetup from '@/components/PrinterSetup';
 import { Button, Card, Row, Screen, Section, SwitchRow } from '@/components/ui';
 import { WEB_URL } from '@/lib/config';
@@ -77,12 +78,27 @@ export default function SettingsScreen() {
         title="This phone"
         footer={
           settings.mode === 'station'
-            ? 'Prints orders while the app is open, one at a time, sharing the queue with your other devices. Keep the phone on charge; the screen stays on while printing.'
+            ? settings.runInBackground
+              ? 'Prints orders in the background even when minimized. A notification stays in your status bar while active.'
+              : 'Prints orders while the app is open, one at a time, sharing the queue with your other devices. Keep the phone on charge; the screen stays on while printing.'
             : 'You see orders and can accept them; your desktop app prints them.'
         }
       >
         <Card>
           <SwitchRow first title="Print station" subtitle="Print orders from this phone" value={settings.mode === 'station'} onValueChange={setStation} />
+          {settings.mode === 'station' ? (
+            <SwitchRow
+              title="Keep running in background"
+              subtitle="Continue checking orders and printing when minimized"
+              value={Boolean(settings.runInBackground)}
+              onValueChange={async (on) => {
+                if (on && Platform.OS === 'android') {
+                  await requestNotificationPermission().catch(() => undefined);
+                }
+                updateSettings({ runInBackground: on });
+              }}
+            />
+          ) : null}
         </Card>
       </Section>
 

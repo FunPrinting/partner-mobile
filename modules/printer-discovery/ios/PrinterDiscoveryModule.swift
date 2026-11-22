@@ -32,6 +32,22 @@ public final class PrinterDiscoveryModule: Module {
     AsyncFunction("getJobStatus") { (_: String, _: Int, promise: Promise) in
       promise.reject("UNSUPPORTED", "getJobStatus is Android-specific")
     }
+
+    AsyncFunction("startStationService") { (_: String, _: String, promise: Promise) in
+      promise.resolve(false)
+    }
+
+    AsyncFunction("stopStationService") { (promise: Promise) in
+      promise.resolve(false)
+    }
+
+    AsyncFunction("isStationServiceRunning") { (promise: Promise) in
+      promise.resolve(false)
+    }
+
+    AsyncFunction("requestNotificationPermission") { (promise: Promise) in
+      promise.resolve(true)
+    }
   }
 }
 

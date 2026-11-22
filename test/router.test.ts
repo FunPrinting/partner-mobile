@@ -109,3 +109,11 @@ test('setting printer DPI updates entry and upsert preserves DPI', () => {
   const refreshed = upsertPrinter(updated, { ...ipp, id: 'p1', address: 'ipp://10.0.0.50:631/ipp/print' });
   assert.equal((refreshed[0] as IppPrinter).dpi, 600);
 });
+
+test('runInBackground preserves setting in migrateSettings', () => {
+  const s = migrateSettings({ mode: 'station', printers: [], runInBackground: true });
+  assert.equal(s.mode, 'station');
+  assert.equal(s.runInBackground, true);
+  const def = migrateSettings({ mode: 'companion' });
+  assert.equal(def.runInBackground, undefined);
+});

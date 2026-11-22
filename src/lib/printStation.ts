@@ -10,7 +10,8 @@
  *   (skipping printed files) and still sends the report.
  * - After a failure, waits 2 minutes before taking another job.
  */
-import { Alert, AppState } from 'react-native';
+import { Alert, AppState, Platform } from 'react-native';
+import { startStationService } from '../../modules/printer-discovery';
 import { reportError } from './errors';
 import { cannotPrintJob, nextJob, type Job } from './jobLogic';
 import { jobsStore, syncJobs } from './jobs';
@@ -53,14 +54,20 @@ function persist() {
 
 function setStatus(status: string) {
   const cur = stationStore.get().current;
-  if (cur) stationStore.set({ current: { ...cur, status } });
+  if (cur) {
+    stationStore.set({ current: { ...cur, status } });
+    if (Platform.OS === 'android' && settingsStore.get().runInBackground) {
+      startStationService('FunPrinting Partner · Printing', `${cur.label}: ${status}`).catch(() => undefined);
+    }
+  }
 }
 
 const switchedOn = () => settingsStore.get().printers.filter((p) => p.enabled);
 
 function enabled() {
   const s = settingsStore.get();
-  return s.mode === 'station' && s.printers.some((p) => p.enabled) && AppState.currentState === 'active' && Boolean(deviceId());
+  const appReady = AppState.currentState === 'active' || Boolean(s.runInBackground);
+  return s.mode === 'station' && s.printers.some((p) => p.enabled) && appReady && Boolean(deviceId());
 }
 
 const jobPath = (id: string) => `/api/partner/v1/jobs/${encodeURIComponent(id)}`;
@@ -113,6 +120,9 @@ function finish(job: Job, status: Report['status'], error?: string) {
   persist();
   stationStore.set({ current: null });
   clearDownloads();
+  if (Platform.OS === 'android' && settingsStore.get().runInBackground) {
+    startStationService('FunPrinting Partner · Station Active', 'Checking orders and printing in background').catch(() => undefined);
+  }
 }
 
 /** Still ours on the server? (cancelled / refunded / taken over → stop) */

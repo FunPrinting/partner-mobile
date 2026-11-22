@@ -24,9 +24,14 @@ export type AirPrintPrinter = Base & { kind: 'airprint'; url: string };
 export type DialogPrinter = Base & { kind: 'dialog' };
 export type PrinterEntry = IppPrinter | AirPrintPrinter | DialogPrinter;
 
-export type Settings = { mode: 'companion' | 'station'; printers: PrinterEntry[] };
+export type Settings = {
+  mode: 'companion' | 'station';
+  printers: PrinterEntry[];
+  /** Whether the station keeps running in the background when minimized. */
+  runInBackground?: boolean;
+};
 
-export const DEFAULT_SETTINGS: Settings = { mode: 'companion', printers: [] };
+export const DEFAULT_SETTINGS: Settings = { mode: 'companion', printers: [], runInBackground: false };
 
 const A3 = 'iso_a3_297x420mm';
 
@@ -55,15 +60,16 @@ export function routerPrinter(p: PrinterEntry): RouterPrinter {
 
 /** Settings saved by an earlier version had one `printer`; it becomes the first entry. */
 export function migrateSettings(raw: unknown): Settings {
-  const r = (raw && typeof raw === 'object' ? raw : {}) as { mode?: unknown; printers?: unknown; printer?: any };
+  const r = (raw && typeof raw === 'object' ? raw : {}) as { mode?: unknown; printers?: unknown; printer?: any; runInBackground?: unknown };
   const mode = r.mode === 'station' ? 'station' : 'companion';
-  if (Array.isArray(r.printers)) return { mode, printers: r.printers as PrinterEntry[] };
+  const bg = r.runInBackground !== undefined ? { runInBackground: Boolean(r.runInBackground) } : {};
+  if (Array.isArray(r.printers)) return { mode, printers: r.printers as PrinterEntry[], ...bg };
   const old = r.printer;
-  if (!old || typeof old !== 'object' || !old.kind) return { mode, printers: [] };
+  if (!old || typeof old !== 'object' || !old.kind) return { mode, printers: [], ...bg };
   const entry = { ...old, enabled: true, preferredBw: false } as PrinterEntry;
   entry.id = entryId(entry as any);
   if (entry.kind === 'dialog') entry.name = 'System print dialog';
-  return { mode, printers: [entry] };
+  return { mode, printers: [entry], ...bg };
 }
 
 /** Add or replace the entry with the same id, keeping what the shop chose (on/off, B&W, DPI). */

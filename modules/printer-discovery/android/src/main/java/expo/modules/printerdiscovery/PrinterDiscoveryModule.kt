@@ -79,6 +79,38 @@ class PrinterDiscoveryModule : Module() {
         }
       }.start()
     }
+
+    AsyncFunction("startStationService") { title: String, message: String, promise: Promise ->
+      try {
+        StationForegroundService.start(context, title, message)
+        promise.resolve(true)
+      } catch (e: Exception) {
+        promise.reject("START_SERVICE_FAILED", e.message ?: "Failed to start station service", e)
+      }
+    }
+
+    AsyncFunction("stopStationService") { promise: Promise ->
+      try {
+        StationForegroundService.stop(context)
+        promise.resolve(true)
+      } catch (e: Exception) {
+        promise.reject("STOP_SERVICE_FAILED", e.message ?: "Failed to stop station service", e)
+      }
+    }
+
+    AsyncFunction("isStationServiceRunning") { promise: Promise ->
+      promise.resolve(StationForegroundService.isServiceRunning())
+    }
+
+    AsyncFunction("requestNotificationPermission") { promise: Promise ->
+      val activity = appContext.currentActivity
+      if (Build.VERSION.SDK_INT >= 33 && activity != null) {
+        if (activity.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+          activity.requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 4002)
+        }
+      }
+      promise.resolve(true)
+    }
   }
 }
 

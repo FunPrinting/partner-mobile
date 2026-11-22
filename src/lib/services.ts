@@ -5,7 +5,8 @@
  */
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { useEffect } from 'react';
-import { AppState } from 'react-native';
+import { AppState, Platform } from 'react-native';
+import { startStationService, stopStationService } from '../../modules/printer-discovery';
 import { connect, disconnect } from './connection';
 import { installGlobalErrorHandler } from './errors';
 import { onJobsSynced, resetJobs, syncJobs } from './jobs';
@@ -26,6 +27,17 @@ function updateKeepAwake() {
   else deactivateKeepAwake(KEEP_AWAKE_TAG).catch(() => undefined);
 }
 
+function syncStationService() {
+  if (Platform.OS !== 'android') return;
+  const s = settingsStore.get();
+  const shouldRun = s.mode === 'station' && Boolean(s.runInBackground) && s.printers.some((p) => p.enabled);
+  if (shouldRun) {
+    startStationService('FunPrinting Partner · Station Active', 'Checking orders and printing in background').catch(() => undefined);
+  } else {
+    stopStationService().catch(() => undefined);
+  }
+}
+
 function start() {
   if (stop) return;
   const unsubSynced = onJobsSynced(() => {
@@ -38,6 +50,9 @@ function start() {
   let poll: ReturnType<typeof setInterval> | null = setInterval(() => syncJobs(), POLL_MS);
   const appState = AppState.addEventListener('change', (state) => {
     updateKeepAwake();
+    syncStationService();
+    const s = settingsStore.get();
+    const allowBg = s.mode === 'station' && Boolean(s.runInBackground) && s.printers.some((p) => p.enabled);
     if (state === 'active') {
       connect(() => {
         syncJobs();
@@ -45,17 +60,23 @@ function start() {
       syncJobs();
       if (!poll) poll = setInterval(() => syncJobs(), POLL_MS);
     } else if (state === 'background') {
-      // The OS suspends the app soon anyway; drop the socket cleanly
-      if (poll) clearInterval(poll);
-      poll = null;
-      disconnect();
+      if (allowBg) {
+        if (!poll) poll = setInterval(() => syncJobs(), POLL_MS);
+      } else {
+        // The OS suspends the app soon anyway; drop the socket cleanly
+        if (poll) clearInterval(poll);
+        poll = null;
+        disconnect();
+      }
     }
   });
   const unsubSettings = settingsStore.subscribe(() => {
     updateKeepAwake();
+    syncStationService();
     runStation();
   });
   updateKeepAwake();
+  syncStationService();
   stop = () => {
     unsubSynced();
     unsubSettings();
@@ -63,6 +84,9 @@ function start() {
     if (poll) clearInterval(poll);
     disconnect();
     deactivateKeepAwake(KEEP_AWAKE_TAG).catch(() => undefined);
+    if (Platform.OS === 'android') {
+      stopStationService().catch(() => undefined);
+    }
     resetJobs();
     stop = null;
   };

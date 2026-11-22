@@ -43,3 +43,7 @@ export function preferForBw(id: string, on: boolean) {
 export function changePrinterDpi(id: string, dpi: 200 | 300 | 600) {
   save({ printers: setPrinterDpi(settingsStore.get().printers, id, dpi) });
 }
+
+export function setRunInBackground(on: boolean) {
+  save({ runInBackground: on });
+}

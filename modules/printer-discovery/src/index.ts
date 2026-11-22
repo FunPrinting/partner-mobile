@@ -51,6 +51,10 @@ type Native = {
   sendIpp?(url: string, requestBase64: string): Promise<{ status: number; responseBase64: string }>;
   printRaster?(printerUrl: string, pdfUri: string, options: Record<string, unknown>): Promise<PrintRasterResult>;
   getJobStatus?(printerUrl: string, jobId: number): Promise<JobStatusResult>;
+  startStationService?(title: string, message: string): Promise<boolean>;
+  stopStationService?(): Promise<boolean>;
+  isStationServiceRunning?(): Promise<boolean>;
+  requestNotificationPermission?(): Promise<boolean>;
 };
 
 const native = requireOptionalNativeModule<Native>('PrinterDiscovery');
@@ -124,4 +128,28 @@ export async function printRaster(printerUrl: string, pdfUri: string, options: P
 export async function getJobStatus(printerUrl: string, jobId: number): Promise<JobStatusResult | null> {
   if (!native || !native.getJobStatus) return null;
   return native.getJobStatus(printerUrl, jobId);
+}
+
+/** Starts or updates the Android Foreground Service for persistent background station printing. */
+export async function startStationService(title = 'FunPrinting Partner · Station Active', message = 'Checking orders and printing in background'): Promise<boolean> {
+  if (!native || !native.startStationService) return false;
+  return native.startStationService(title, message);
+}
+
+/** Stops the Android Foreground Service and removes the persistent notification. */
+export async function stopStationService(): Promise<boolean> {
+  if (!native || !native.stopStationService) return false;
+  return native.stopStationService();
+}
+
+/** Checks whether the Android Foreground Service is currently running. */
+export async function isStationServiceRunning(): Promise<boolean> {
+  if (!native || !native.isStationServiceRunning) return false;
+  return native.isStationServiceRunning();
+}
+
+/** Requests Android 13+ POST_NOTIFICATIONS permission for the foreground service notification. */
+export async function requestNotificationPermission(): Promise<boolean> {
+  if (!native || !native.requestNotificationPermission) return false;
+  return native.requestNotificationPermission();
 }
