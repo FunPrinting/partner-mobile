@@ -17,6 +17,8 @@ export type IppPrinter = Base & {
   sides: string[];
   colorModes: string[];
   media: string[];
+  /** Render resolution in dots per inch for direct host raster printing (default 300). */
+  dpi?: 200 | 300 | 600;
 };
 export type AirPrintPrinter = Base & { kind: 'airprint'; url: string };
 export type DialogPrinter = Base & { kind: 'dialog' };
@@ -64,13 +66,19 @@ export function migrateSettings(raw: unknown): Settings {
   return { mode, printers: [entry] };
 }
 
-/** Add or replace the entry with the same id, keeping what the shop chose (on/off, B&W). */
+/** Add or replace the entry with the same id, keeping what the shop chose (on/off, B&W, DPI). */
 export function upsertPrinter(list: PrinterEntry[], next: PrinterEntry): PrinterEntry[] {
   const i = list.findIndex((p) => p.id === next.id || (next.kind === 'ipp' && p.kind === 'ipp' && next.uuid && p.uuid === next.uuid));
   if (i < 0) return [...list, next];
   const keep = list[i];
-  const merged = { ...next, id: keep.id, enabled: keep.enabled, preferredBw: keep.preferredBw } as PrinterEntry;
+  const keepDpi = keep.kind === 'ipp' ? keep.dpi : undefined;
+  const merged = { ...next, id: keep.id, enabled: keep.enabled, preferredBw: keep.preferredBw, ...(keepDpi ? { dpi: keepDpi } : {}) } as PrinterEntry;
   return list.map((p, k) => (k === i ? merged : p));
+}
+
+/** Updates the render DPI for a printer (200 = Draft, 300 = Normal, 600 = High). */
+export function setPrinterDpi(list: PrinterEntry[], id: string, dpi: 200 | 300 | 600): PrinterEntry[] {
+  return list.map((p) => (p.id === id && p.kind === 'ipp' ? { ...p, dpi } : p));
 }
 
 /** Only one printer is "preferred for B&W". */

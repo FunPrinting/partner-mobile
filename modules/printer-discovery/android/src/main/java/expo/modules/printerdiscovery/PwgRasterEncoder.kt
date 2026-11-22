@@ -366,3 +366,4 @@ object PwgRasterEncoder {
     }
   }
 }
+

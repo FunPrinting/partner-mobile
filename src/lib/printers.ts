@@ -18,7 +18,7 @@ import * as Print from 'expo-print';
 import { isAvailable, probePrinter, sendIpp, printRaster } from '../../modules/printer-discovery';
 import * as ipp from './ipp';
 import type { JobFile } from './jobLogic';
-import type { PrinterEntry } from './printerModel';
+import type { IppPrinter, PrinterEntry } from './printerModel';
 import { isWholeFile, planRuns } from './runs';
 
 const IPP_TIMEOUT_MS = 30_000;
@@ -224,6 +224,7 @@ export async function printFile(printer: PrinterEntry, file: File, opts: JobFile
           sided: opts.sided,
           color: run.colour,
           pageSize: opts.pageSize,
+          dpi: (printer as IppPrinter).dpi || 300,
           jobName: runs.length > 1 ? `${jobName} (${i + 1}/${runs.length})` : jobName,
           pages: isWholeFile(run, pages) ? undefined : run.pages,
         });

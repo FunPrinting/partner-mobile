@@ -6,7 +6,7 @@
  * - station: also takes print jobs and prints them on the shop's printers while
  *   the app is open. Each file goes to a switched-on printer that can print it.
  */
-import { DEFAULT_SETTINGS, migrateSettings, setEnabled, setPreferredBw, upsertPrinter, type PrinterEntry, type Settings } from './printerModel';
+import { DEFAULT_SETTINGS, migrateSettings, setEnabled, setPreferredBw, setPrinterDpi, upsertPrinter, type PrinterEntry, type Settings } from './printerModel';
 import { readJson, writeJson } from './storage';
 import { createStore } from './store';
 
@@ -38,4 +38,8 @@ export function switchPrinter(id: string, on: boolean) {
 
 export function preferForBw(id: string, on: boolean) {
   save({ printers: setPreferredBw(settingsStore.get().printers, id, on) });
+}
+
+export function changePrinterDpi(id: string, dpi: 200 | 300 | 600) {
+  save({ printers: setPrinterDpi(settingsStore.get().printers, id, dpi) });
 }

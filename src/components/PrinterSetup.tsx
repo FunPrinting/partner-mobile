@@ -12,7 +12,7 @@ import type { FoundPrinter } from '@/lib/discovery';
 import { canSearch, findPrinters } from '@/lib/findPrinters';
 import { chooseAirPrintPrinter, checkIppPrinter, printFile } from '@/lib/printers';
 import type { IppPrinter, PrinterEntry } from '@/lib/printerModel';
-import { preferForBw, removePrinter, savePrinter, settingsStore, switchPrinter } from '@/lib/settings';
+import { changePrinterDpi, preferForBw, removePrinter, savePrinter, settingsStore, switchPrinter } from '@/lib/settings';
 import { useStore } from '@/lib/store';
 import { space } from '@/theme';
 
@@ -22,11 +22,12 @@ function abilities(p: PrinterEntry): string {
   if (p.kind === 'dialog') return 'Asks you to confirm each file';
   if (p.kind === 'airprint') return 'AirPrint · uses the printer\'s own settings';
   const isRaster = !p.formats.includes('application/pdf') && p.formats.includes('image/pwg-raster');
+  const dpiText = p.kind === 'ipp' ? `${p.dpi || 300} DPI` : '';
   const out = [
     p.colorModes.length ? (p.colorModes.includes('color') ? 'Colour' : 'B&W only') : '',
     p.sides.length ? (p.sides.some((s) => s.startsWith('two-sided')) ? 'Double-sided' : 'Single-sided') : '',
     p.media.includes('iso_a3_297x420mm') ? 'A3' : '',
-    isRaster ? 'Direct Host' : '',
+    isRaster ? `Direct Host (${dpiText})` : dpiText,
   ];
   return out.filter(Boolean).join(' · ') || 'Wi-Fi';
 }
@@ -169,6 +170,28 @@ export default function PrinterSetup() {
                 ) : null}
                 <Button variant="plain" title="Remove" onPress={() => removePrinter(p.id)} />
               </View>
+              {p.kind === 'ipp' && (p.formats.includes('image/pwg-raster') || !p.formats.includes('application/pdf')) ? (
+                <View style={{ gap: space.xs, marginTop: 4 }}>
+                  <Body tone="secondary">Print Resolution (DPI)</Body>
+                  <View style={{ flexDirection: 'row', gap: space.xs, flexWrap: 'wrap' }}>
+                    {([
+                      { val: 200, label: '200 Draft' },
+                      { val: 300, label: '300 Normal' },
+                      { val: 600, label: '600 High' },
+                    ] as const).map((opt) => {
+                      const isSelected = (p.dpi || 300) === opt.val;
+                      return (
+                        <Button
+                          key={opt.val}
+                          variant={isSelected ? 'primary' : 'secondary'}
+                          title={isSelected ? `${opt.label} ✓` : opt.label}
+                          onPress={() => changePrinterDpi(p.id, opt.val)}
+                        />
+                      );
+                    })}
+                  </View>
+                </View>
+              ) : null}
             </View>
           ))}
           {message ? <Banner tone={message.tone} title={message.title} message={message.text} /> : null}

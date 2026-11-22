@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { choosePrinter, whyImpossible, type RouterPrinter } from '../src/lib/router.ts';
 import { planRuns, isWholeFile } from '../src/lib/runs.ts';
-import { migrateSettings, routerPrinter, upsertPrinter, setPreferredBw, setEnabled, type IppPrinter, type PrinterEntry } from '../src/lib/printerModel.ts';
+import { migrateSettings, routerPrinter, upsertPrinter, setPreferredBw, setEnabled, setPrinterDpi, type IppPrinter, type PrinterEntry } from '../src/lib/printerModel.ts';
 import * as logic from '../src/lib/jobLogic.ts';
 
 const colour: RouterPrinter = { id: 'c', name: 'Colour', enabled: true, caps: { color: true, duplex: false, a3: false, pdf: true } };
@@ -100,4 +100,12 @@ test('a job whose files are not converted yet waits, and needs a capable printer
   assert.match(logic.cannotPrintJob(job('https://x/a.pdf', { sided: 'double' }), [colour])!, /double-sided/);
   assert.equal(logic.nextJob([job('https://x/a.pdf')], [colour], new Set())?.jobId, 'J1');
   assert.equal(logic.nextJob([job('https://x/a.pdf')], [colour], new Set(['J1'])), null);
+});
+
+test('setting printer DPI updates entry and upsert preserves DPI', () => {
+  const p: PrinterEntry = { ...ipp, id: 'p1', dpi: 300 };
+  const updated = setPrinterDpi([p], 'p1', 600);
+  assert.equal((updated[0] as IppPrinter).dpi, 600);
+  const refreshed = upsertPrinter(updated, { ...ipp, id: 'p1', address: 'ipp://10.0.0.50:631/ipp/print' });
+  assert.equal((refreshed[0] as IppPrinter).dpi, 600);
 });
