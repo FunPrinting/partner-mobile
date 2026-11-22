@@ -3,7 +3,7 @@
     "name": "FunPrinting Partner",
     "slug": "partner-mobile",
     "scheme": "funprintingpartner",
-    "version": "1.0.0",
+    "version": "1.0.25",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
