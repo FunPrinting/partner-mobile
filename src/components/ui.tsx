@@ -146,6 +146,7 @@ export function SwitchRow({ title, subtitle, value, onValueChange, first, disabl
       title={title}
       subtitle={subtitle}
       first={first}
+      onPress={disabled ? undefined : () => onValueChange(!value)}
       right={
         <Switch
           value={value}
@@ -155,6 +156,7 @@ export function SwitchRow({ title, subtitle, value, onValueChange, first, disabl
             onValueChange(v);
           }}
           trackColor={{ true: colors.primary, false: colors.border }}
+          thumbColor={Platform.OS === 'android' ? (value ? '#FFFFFF' : '#F4F3F4') : undefined}
           accessibilityLabel={title}
         />
       }

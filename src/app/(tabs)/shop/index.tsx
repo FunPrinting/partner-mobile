@@ -81,6 +81,8 @@ export default function ShopScreen() {
   // Form state
   const [isOnline, setIsOnline] = useState(false);
   const [manual, setManual] = useState(false);
+  const [updatingMode, setUpdatingMode] = useState(false);
+  const [updatingOnline, setUpdatingOnline] = useState(false);
   
   // Printing service
   const [printingEnabled, setPrintingEnabled] = useState(true);
@@ -217,6 +219,53 @@ export default function ShopScreen() {
   const edit = <T,>(setter: (v: T) => void) => (v: T) => {
     setter(v);
     setDirty(true);
+  };
+
+  const toggleAcceptanceMode = async (nextManual: boolean) => {
+    setManual(nextManual);
+    setUpdatingMode(true);
+    try {
+      const res = await api<{ partner?: Profile }>('/api/partner/profile', {
+        method: 'POST',
+        body: { acceptanceMode: nextManual ? 'manual' : 'auto' },
+      });
+      if (!res.ok) {
+        throw new Error((res.data as any)?.error || 'Could not update acceptance mode');
+      }
+      if (res.data?.partner) {
+        setProfile(res.data.partner);
+        setManual(res.data.partner.acceptanceMode === 'manual');
+      }
+    } catch (err) {
+      setManual(!nextManual);
+      Alert.alert('Could not update', err instanceof Error ? err.message : 'Check connection and try again.');
+    } finally {
+      setUpdatingMode(false);
+    }
+  };
+
+  const toggleOnline = async (nextOnline: boolean) => {
+    if (!profile?.isActive) return;
+    setIsOnline(nextOnline);
+    setUpdatingOnline(true);
+    try {
+      const res = await api<{ partner?: Profile }>('/api/partner/profile', {
+        method: 'POST',
+        body: { isOnline: nextOnline },
+      });
+      if (!res.ok) {
+        throw new Error((res.data as any)?.error || 'Could not update online status');
+      }
+      if (res.data?.partner) {
+        setProfile(res.data.partner);
+        setIsOnline(Boolean(res.data.partner.isOnline));
+      }
+    } catch (err) {
+      setIsOnline(!nextOnline);
+      Alert.alert('Could not update', err instanceof Error ? err.message : 'Check connection and try again.');
+    } finally {
+      setUpdatingOnline(false);
+    }
   };
 
   const useGps = async () => {
@@ -360,8 +409,21 @@ export default function ShopScreen() {
         <>
           <Section title={profile.businessName || 'Shop'}>
             <Card>
-              <SwitchRow first title="Taking orders" subtitle="Show your shop to customers nearby" value={isOnline} onValueChange={edit(setIsOnline)} disabled={!profile.isActive} />
-              <SwitchRow title="Accept each order first" subtitle="Off: paid orders print automatically" value={manual} onValueChange={edit(setManual)} />
+              <SwitchRow
+                first
+                title="Taking orders"
+                subtitle="Show your shop to customers nearby"
+                value={isOnline}
+                onValueChange={toggleOnline}
+                disabled={!profile.isActive || updatingOnline}
+              />
+              <SwitchRow
+                title="Accept each order first"
+                subtitle={manual ? 'You accept each paid order before it prints' : 'Off: paid orders print automatically'}
+                value={manual}
+                onValueChange={toggleAcceptanceMode}
+                disabled={updatingMode}
+              />
             </Card>
           </Section>
 
