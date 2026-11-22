@@ -14,7 +14,44 @@ type Profile = {
   isActive?: boolean;
   isOnline?: boolean;
   acceptanceMode?: 'auto' | 'manual';
-  pricing?: { perPageBW?: number; perPageColor?: number; binding?: number };
+  servicesOffered?: {
+    printing?: {
+      enabled?: boolean;
+      maxPaperSize?: 'a4' | 'a3' | 'letter' | 'legal';
+      supportsColor?: boolean;
+      supportsBlackAndWhite?: boolean;
+      supportsDoubleSided?: boolean;
+    };
+    binding?: {
+      enabled?: boolean;
+      types?: { spiral?: boolean; perfect?: boolean; staple?: boolean };
+    };
+    lamination?: {
+      enabled?: boolean;
+      maxSize?: 'a4' | 'a3';
+    };
+    scanning?: { enabled?: boolean };
+    photocopying?: { enabled?: boolean; supportsColor?: boolean };
+    plasticFiles?: { enabled?: boolean };
+    delivery?: { enabled?: boolean };
+  };
+  pricing?: {
+    printing?: {
+      a4?: {
+        blackAndWhite?: { singleSided?: number; doubleSided?: number };
+        color?: { singleSided?: number; doubleSided?: number };
+      };
+      a3?: {
+        blackAndWhite?: { singleSided?: number; doubleSided?: number };
+        color?: { singleSided?: number; doubleSided?: number };
+      };
+    };
+    binding?: { spiral?: number; perfect?: number; staple?: number };
+    lamination?: { a4?: number; a3?: number };
+    scanning?: number;
+    photocopying?: { blackAndWhite?: number; color?: number };
+    plasticFiles?: number;
+  };
   phoneNumbers?: string[];
   location?: { coordinates?: [number, number] };
   address?: Record<string, string>;
@@ -38,7 +75,40 @@ export default function ShopScreen() {
   // Form state
   const [isOnline, setIsOnline] = useState(false);
   const [manual, setManual] = useState(false);
-  const [price, setPrice] = useState({ bw: '', color: '', binding: '' });
+  
+  // Printing service
+  const [printingEnabled, setPrintingEnabled] = useState(true);
+  const [maxPaperSize, setMaxPaperSize] = useState<'a4' | 'a3' | 'letter' | 'legal'>('a4');
+  const [supportsColor, setSupportsColor] = useState(true);
+  const [supportsBW, setSupportsBW] = useState(true);
+  const [supportsDuplex, setSupportsDuplex] = useState(false);
+  
+  // Printing prices
+  const [priceA4, setPriceA4] = useState({ bwSingle: '', bwDouble: '', colorSingle: '', colorDouble: '' });
+  const [priceA3, setPriceA3] = useState({ bwSingle: '', bwDouble: '', colorSingle: '', colorDouble: '' });
+  
+  // Binding service
+  const [bindingEnabled, setBindingEnabled] = useState(false);
+  const [bindingTypes, setBindingTypes] = useState({ spiral: false, perfect: false, staple: false });
+  const [bindingPrices, setBindingPrices] = useState({ spiral: '', perfect: '', staple: '' });
+  
+  // Other services
+  const [laminationEnabled, setLaminationEnabled] = useState(false);
+  const [laminationMaxSize, setLaminationMaxSize] = useState<'a4' | 'a3'>('a4');
+  const [laminationPrices, setLaminationPrices] = useState({ a4: '', a3: '' });
+  
+  const [scanningEnabled, setScanningEnabled] = useState(false);
+  const [scanningPrice, setScanningPrice] = useState('');
+  
+  const [photocopyingEnabled, setPhotocopyingEnabled] = useState(false);
+  const [photocopyingColor, setPhotocopyingColor] = useState(false);
+  const [photocopyingPrices, setPhotocopyingPrices] = useState({ bw: '', color: '' });
+  
+  const [plasticFilesEnabled, setPlasticFilesEnabled] = useState(false);
+  const [plasticFilesPrice, setPlasticFilesPrice] = useState('');
+  
+  const [deliveryEnabled, setDeliveryEnabled] = useState(false);
+  
   const [phones, setPhones] = useState<string[]>([]);
   const [location, setLocation] = useState<Point>(DEFAULT_POINT);
   const [points, setPoints] = useState<DeliveryPoint[]>([]);
@@ -53,11 +123,64 @@ export default function ShopScreen() {
       setFinancials(f.ok ? f.data.financials ?? null : null);
       setIsOnline(Boolean(partner.isOnline));
       setManual(partner.acceptanceMode === 'manual');
-      setPrice({
-        bw: String(partner.pricing?.perPageBW ?? ''),
-        color: String(partner.pricing?.perPageColor ?? ''),
-        binding: String(partner.pricing?.binding ?? ''),
+      
+      // Printing service
+      setPrintingEnabled(partner.servicesOffered?.printing?.enabled ?? true);
+      setMaxPaperSize(partner.servicesOffered?.printing?.maxPaperSize ?? 'a4');
+      setSupportsColor(partner.servicesOffered?.printing?.supportsColor ?? true);
+      setSupportsBW(partner.servicesOffered?.printing?.supportsBlackAndWhite ?? true);
+      setSupportsDuplex(partner.servicesOffered?.printing?.supportsDoubleSided ?? false);
+      
+      // Printing prices
+      setPriceA4({
+        bwSingle: String(partner.pricing?.printing?.a4?.blackAndWhite?.singleSided ?? ''),
+        bwDouble: String(partner.pricing?.printing?.a4?.blackAndWhite?.doubleSided ?? ''),
+        colorSingle: String(partner.pricing?.printing?.a4?.color?.singleSided ?? ''),
+        colorDouble: String(partner.pricing?.printing?.a4?.color?.doubleSided ?? ''),
       });
+      setPriceA3({
+        bwSingle: String(partner.pricing?.printing?.a3?.blackAndWhite?.singleSided ?? ''),
+        bwDouble: String(partner.pricing?.printing?.a3?.blackAndWhite?.doubleSided ?? ''),
+        colorSingle: String(partner.pricing?.printing?.a3?.color?.singleSided ?? ''),
+        colorDouble: String(partner.pricing?.printing?.a3?.color?.doubleSided ?? ''),
+      });
+      
+      // Binding service
+      setBindingEnabled(partner.servicesOffered?.binding?.enabled ?? false);
+      setBindingTypes({
+        spiral: partner.servicesOffered?.binding?.types?.spiral ?? false,
+        perfect: partner.servicesOffered?.binding?.types?.perfect ?? false,
+        staple: partner.servicesOffered?.binding?.types?.staple ?? false,
+      });
+      setBindingPrices({
+        spiral: String(partner.pricing?.binding?.spiral ?? ''),
+        perfect: String(partner.pricing?.binding?.perfect ?? ''),
+        staple: String(partner.pricing?.binding?.staple ?? ''),
+      });
+      
+      // Other services
+      setLaminationEnabled(partner.servicesOffered?.lamination?.enabled ?? false);
+      setLaminationMaxSize(partner.servicesOffered?.lamination?.maxSize ?? 'a4');
+      setLaminationPrices({
+        a4: String(partner.pricing?.lamination?.a4 ?? ''),
+        a3: String(partner.pricing?.lamination?.a3 ?? ''),
+      });
+      
+      setScanningEnabled(partner.servicesOffered?.scanning?.enabled ?? false);
+      setScanningPrice(String(partner.pricing?.scanning ?? ''));
+      
+      setPhotocopyingEnabled(partner.servicesOffered?.photocopying?.enabled ?? false);
+      setPhotocopyingColor(partner.servicesOffered?.photocopying?.supportsColor ?? false);
+      setPhotocopyingPrices({
+        bw: String(partner.pricing?.photocopying?.blackAndWhite ?? ''),
+        color: String(partner.pricing?.photocopying?.color ?? ''),
+      });
+      
+      setPlasticFilesEnabled(partner.servicesOffered?.plasticFiles?.enabled ?? false);
+      setPlasticFilesPrice(String(partner.pricing?.plasticFiles ?? ''));
+      
+      setDeliveryEnabled(partner.servicesOffered?.delivery?.enabled ?? false);
+      
       setPhones(partner.phoneNumbers ?? []);
       setLocation(toPoint(partner.location?.coordinates) ?? DEFAULT_POINT);
       setPoints(
@@ -110,7 +233,64 @@ export default function ShopScreen() {
       body: {
         isOnline,
         acceptanceMode: manual ? 'manual' : 'auto',
-        pricing: { perPageBW: num(price.bw, 2), perPageColor: num(price.color, 10), binding: num(price.binding, 40) },
+        servicesOffered: {
+          printing: {
+            enabled: printingEnabled,
+            maxPaperSize,
+            supportsColor,
+            supportsBlackAndWhite: supportsBW,
+            supportsDoubleSided: supportsDuplex,
+          },
+          binding: {
+            enabled: bindingEnabled,
+            types: bindingTypes,
+          },
+          lamination: {
+            enabled: laminationEnabled,
+            maxSize: laminationMaxSize,
+          },
+          scanning: { enabled: scanningEnabled },
+          photocopying: { enabled: photocopyingEnabled, supportsColor: photocopyingColor },
+          plasticFiles: { enabled: plasticFilesEnabled },
+          delivery: { enabled: deliveryEnabled },
+          customServices: [],
+        },
+        pricing: {
+          printing: {
+            a4: {
+              blackAndWhite: { singleSided: num(priceA4.bwSingle, 2), doubleSided: num(priceA4.bwDouble, 3) },
+              color: { singleSided: num(priceA4.colorSingle, 10), doubleSided: num(priceA4.colorDouble, 15) },
+            },
+            a3: {
+              blackAndWhite: { singleSided: num(priceA3.bwSingle, 4), doubleSided: num(priceA3.bwDouble, 6) },
+              color: { singleSided: num(priceA3.colorSingle, 20), doubleSided: num(priceA3.colorDouble, 30) },
+            },
+            letter: {
+              blackAndWhite: { singleSided: num(priceA4.bwSingle, 2), doubleSided: num(priceA4.bwDouble, 3) },
+              color: { singleSided: num(priceA4.colorSingle, 10), doubleSided: num(priceA4.colorDouble, 15) },
+            },
+            legal: {
+              blackAndWhite: { singleSided: num(priceA4.bwSingle, 2), doubleSided: num(priceA4.bwDouble, 3) },
+              color: { singleSided: num(priceA4.colorSingle, 10), doubleSided: num(priceA4.colorDouble, 15) },
+            },
+          },
+          binding: {
+            spiral: num(bindingPrices.spiral, 30),
+            perfect: num(bindingPrices.perfect, 50),
+            staple: num(bindingPrices.staple, 10),
+          },
+          lamination: {
+            a4: num(laminationPrices.a4, 20),
+            a3: num(laminationPrices.a3, 40),
+          },
+          scanning: num(scanningPrice, 5),
+          photocopying: {
+            blackAndWhite: num(photocopyingPrices.bw, 2),
+            color: num(photocopyingPrices.color, 10),
+          },
+          plasticFiles: num(plasticFilesPrice, 10),
+          customServices: [],
+        },
         phoneNumbers: phones.map((p) => p.trim()).filter(Boolean),
         location: { type: 'Point', coordinates: [location.longitude, location.latitude] },
         // The server replaces the address whenever the location is sent
@@ -160,19 +340,121 @@ export default function ShopScreen() {
             </Card>
           </Section>
 
-          <Section title="Prices (₹)" footer="Customers pay these plus a 3% processing fee.">
+          <Section title="Printing service" footer="Configure your printer capabilities. A3 printer can also print A4 and smaller.">
             <Card>
-              <View style={{ flexDirection: 'row', gap: space.md }}>
+              <SwitchRow first title="Enable printing" subtitle="Core printing service" value={printingEnabled} onValueChange={edit(setPrintingEnabled)} />
+              <SwitchRow title="Supports color" subtitle="Color printing available" value={supportsColor} onValueChange={edit(setSupportsColor)} />
+              <SwitchRow title="Supports B&W" subtitle="Black & white printing" value={supportsBW} onValueChange={edit(setSupportsBW)} />
+              <SwitchRow title="Supports duplex" subtitle="Double-sided printing" value={supportsDuplex} onValueChange={edit(setSupportsDuplex)} />
+            </Card>
+          </Section>
+
+          <Section title="Printing prices (₹)" footer="Per-page prices. Customers pay these plus 3% processing fee.">
+            <Card>
+              <Text style={[type.footnote, { color: colors.textSecondary, marginBottom: space.sm }]}>A4 size</Text>
+              <View style={{ flexDirection: 'row', gap: space.md, marginBottom: space.md }}>
                 <View style={{ flex: 1 }}>
-                  <Field label="B&W page" keyboardType="decimal-pad" value={price.bw} onChangeText={(v) => edit(setPrice)({ ...price, bw: v })} />
+                  <Field label="B&W single" keyboardType="decimal-pad" value={priceA4.bwSingle} onChangeText={(v) => edit(setPriceA4)({ ...priceA4, bwSingle: v })} />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Field label="Colour page" keyboardType="decimal-pad" value={price.color} onChangeText={(v) => edit(setPrice)({ ...price, color: v })} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Field label="Binding" keyboardType="decimal-pad" value={price.binding} onChangeText={(v) => edit(setPrice)({ ...price, binding: v })} />
+                  <Field label="B&W duplex" keyboardType="decimal-pad" value={priceA4.bwDouble} onChangeText={(v) => edit(setPriceA4)({ ...priceA4, bwDouble: v })} />
                 </View>
               </View>
+              <View style={{ flexDirection: 'row', gap: space.md, marginBottom: space.lg }}>
+                <View style={{ flex: 1 }}>
+                  <Field label="Color single" keyboardType="decimal-pad" value={priceA4.colorSingle} onChangeText={(v) => edit(setPriceA4)({ ...priceA4, colorSingle: v })} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Field label="Color duplex" keyboardType="decimal-pad" value={priceA4.colorDouble} onChangeText={(v) => edit(setPriceA4)({ ...priceA4, colorDouble: v })} />
+                </View>
+              </View>
+              
+              <Text style={[type.footnote, { color: colors.textSecondary, marginBottom: space.sm }]}>A3 size</Text>
+              <View style={{ flexDirection: 'row', gap: space.md, marginBottom: space.md }}>
+                <View style={{ flex: 1 }}>
+                  <Field label="B&W single" keyboardType="decimal-pad" value={priceA3.bwSingle} onChangeText={(v) => edit(setPriceA3)({ ...priceA3, bwSingle: v })} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Field label="B&W duplex" keyboardType="decimal-pad" value={priceA3.bwDouble} onChangeText={(v) => edit(setPriceA3)({ ...priceA3, bwDouble: v })} />
+                </View>
+              </View>
+              <View style={{ flexDirection: 'row', gap: space.md }}>
+                <View style={{ flex: 1 }}>
+                  <Field label="Color single" keyboardType="decimal-pad" value={priceA3.colorSingle} onChangeText={(v) => edit(setPriceA3)({ ...priceA3, colorSingle: v })} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Field label="Color duplex" keyboardType="decimal-pad" value={priceA3.colorDouble} onChangeText={(v) => edit(setPriceA3)({ ...priceA3, colorDouble: v })} />
+                </View>
+              </View>
+            </Card>
+          </Section>
+
+          <Section title="Binding service" footer="Price per order (not per page). Enable types you offer.">
+            <Card>
+              <SwitchRow first title="Enable binding" subtitle="Book and document binding" value={bindingEnabled} onValueChange={edit(setBindingEnabled)} />
+              <SwitchRow title="Spiral binding" subtitle="Coil or comb binding" value={bindingTypes.spiral} onValueChange={(v) => edit(setBindingTypes)({ ...bindingTypes, spiral: v })} />
+              <SwitchRow title="Perfect binding" subtitle="Glued spine like a book" value={bindingTypes.perfect} onValueChange={(v) => edit(setBindingTypes)({ ...bindingTypes, perfect: v })} />
+              <SwitchRow title="Staple binding" subtitle="Simple stapled pages" value={bindingTypes.staple} onValueChange={(v) => edit(setBindingTypes)({ ...bindingTypes, staple: v })} />
+              <View style={{ flexDirection: 'row', gap: space.md, marginTop: space.sm }}>
+                <View style={{ flex: 1 }}>
+                  <Field label="Spiral (₹)" keyboardType="decimal-pad" value={bindingPrices.spiral} onChangeText={(v) => edit(setBindingPrices)({ ...bindingPrices, spiral: v })} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Field label="Perfect (₹)" keyboardType="decimal-pad" value={bindingPrices.perfect} onChangeText={(v) => edit(setBindingPrices)({ ...bindingPrices, perfect: v })} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Field label="Staple (₹)" keyboardType="decimal-pad" value={bindingPrices.staple} onChangeText={(v) => edit(setBindingPrices)({ ...bindingPrices, staple: v })} />
+                </View>
+              </View>
+            </Card>
+          </Section>
+
+          <Section title="Other services">
+            <Card>
+              <SwitchRow first title="Lamination" subtitle="Protective plastic coating" value={laminationEnabled} onValueChange={edit(setLaminationEnabled)} />
+              {laminationEnabled ? (
+                <View style={{ marginTop: space.sm, marginLeft: space.lg }}>
+                  <View style={{ flexDirection: 'row', gap: space.md }}>
+                    <View style={{ flex: 1 }}>
+                      <Field label="A4 price (₹)" keyboardType="decimal-pad" value={laminationPrices.a4} onChangeText={(v) => edit(setLaminationPrices)({ ...laminationPrices, a4: v })} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Field label="A3 price (₹)" keyboardType="decimal-pad" value={laminationPrices.a3} onChangeText={(v) => edit(setLaminationPrices)({ ...laminationPrices, a3: v })} />
+                    </View>
+                  </View>
+                </View>
+              ) : null}
+              
+              <SwitchRow title="Scanning" subtitle="Convert physical to digital" value={scanningEnabled} onValueChange={edit(setScanningEnabled)} />
+              {scanningEnabled ? (
+                <View style={{ marginTop: space.sm, marginLeft: space.lg }}>
+                  <Field label="Price per page (₹)" keyboardType="decimal-pad" value={scanningPrice} onChangeText={edit(setScanningPrice)} />
+                </View>
+              ) : null}
+              
+              <SwitchRow title="Photocopying" subtitle="Make copies of documents" value={photocopyingEnabled} onValueChange={edit(setPhotocopyingEnabled)} />
+              {photocopyingEnabled ? (
+                <View style={{ marginTop: space.sm, marginLeft: space.lg }}>
+                  <SwitchRow title="Color available" subtitle="Not just B&W copies" value={photocopyingColor} onValueChange={edit(setPhotocopyingColor)} />
+                  <View style={{ flexDirection: 'row', gap: space.md, marginTop: space.sm }}>
+                    <View style={{ flex: 1 }}>
+                      <Field label="B&W per page (₹)" keyboardType="decimal-pad" value={photocopyingPrices.bw} onChangeText={(v) => edit(setPhotocopyingPrices)({ ...photocopyingPrices, bw: v })} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Field label="Color per page (₹)" keyboardType="decimal-pad" value={photocopyingPrices.color} onChangeText={(v) => edit(setPhotocopyingPrices)({ ...photocopyingPrices, color: v })} />
+                    </View>
+                  </View>
+                </View>
+              ) : null}
+              
+              <SwitchRow title="Plastic files" subtitle="Transparent document folders" value={plasticFilesEnabled} onValueChange={edit(setPlasticFilesEnabled)} />
+              {plasticFilesEnabled ? (
+                <View style={{ marginTop: space.sm, marginLeft: space.lg }}>
+                  <Field label="Price per item (₹)" keyboardType="decimal-pad" value={plasticFilesPrice} onChangeText={edit(setPlasticFilesPrice)} />
+                </View>
+              ) : null}
+              
+              <SwitchRow title="Delivery" subtitle="Deliver orders to customers" value={deliveryEnabled} onValueChange={edit(setDeliveryEnabled)} />
             </Card>
           </Section>
 
