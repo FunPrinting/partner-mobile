@@ -1,0 +1,7 @@
+{
+  "name": "printer-discovery",
+  "version": "1.0.0",
+  "description": "Finds IPP printers on the local network (Bonjour / mDNS)",
+  "main": "src/index.ts",
+  "private": true
+}

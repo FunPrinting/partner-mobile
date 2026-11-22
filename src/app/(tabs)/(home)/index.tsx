@@ -26,9 +26,9 @@ function StatusCard() {
           <Text style={[type.headline, { color: colors.text }]}>{isStation ? 'Print station' : 'Companion'}</Text>
           <Body tone="tertiary">
             {isStation
-              ? settings.printer
-                ? `Prints on ${settings.printer.kind === 'dialog' ? 'any printer (you confirm each file)' : settings.printer.name} while this app is open`
-                : 'Choose a printer in Settings to start'
+              ? settings.printers.some((p) => p.enabled)
+                ? `Prints on ${settings.printers.filter((p) => p.enabled).map((p) => (p.kind === 'dialog' ? 'any printer (you confirm each file)' : p.name)).join(' and ')} while this app is open`
+                : 'Switch on a printer in Settings to start'
               : 'Orders print on your shop computer'}
           </Body>
         </View>
@@ -86,8 +86,8 @@ export default function JobsScreen() {
         <Banner tone="danger" title="The last print failed" message={`${station.lastError}. The order went back to your queue; the next one starts in 2 minutes.`} />
       ) : null}
       {station.pendingReports ? <Banner tone="info" title={`${station.pendingReports} finished job(s) will be reported when you are back online`} /> : null}
-      {settings.mode === 'station' && !settings.printer ? (
-        <Banner tone="info" title="No printer chosen" message="This phone is a print station but has no printer yet." action={<Button variant="plain" title="Choose a printer" onPress={() => router.navigate('/settings')} style={{ alignSelf: 'flex-start', paddingHorizontal: 0 }} />} />
+      {settings.mode === 'station' && !settings.printers.some((p) => p.enabled) ? (
+        <Banner tone="info" title="No printer switched on" message="This phone is a print station but has no printer switched on yet." action={<Button variant="plain" title="Choose a printer" onPress={() => router.navigate('/settings')} style={{ alignSelf: 'flex-start', paddingHorizontal: 0 }} />} />
       ) : null}
 
       {groups.pending.length ? (

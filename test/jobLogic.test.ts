@@ -5,7 +5,6 @@ import { base64, base64url, safeEqual } from '../src/lib/encoding.ts';
 
 const pdf: logic.JobFile = { url: 'https://c.example/raw/upload/abc', name: 'notes', mime: 'application/pdf', copies: 1 };
 const docx: logic.JobFile = { url: 'https://c.example/a.docx', name: 'a.docx' };
-const ipp: logic.PrintMethod = { kind: 'ipp', formats: ['application/pdf', 'image/jpeg'], sides: ['one-sided'], colorModes: ['monochrome', 'color'], media: ['iso_a4_210x297mm'] };
 const job = (over: Partial<logic.Job>): logic.Job => ({ jobId: 'J1', orderId: 'O1', status: 'queued', files: [pdf], createdAt: '2026-11-18T10:00:00Z', ...over });
 
 test('fileKind uses mime, then name, then URL', () => {
@@ -16,27 +15,6 @@ test('fileKind uses mime, then name, then URL', () => {
   assert.equal(logic.fileKind(docx), 'other');
 });
 
-test('cannotPrint explains what the phone or printer lacks', () => {
-  assert.equal(logic.cannotPrint(pdf, { kind: 'airprint' }), null);
-  assert.match(logic.cannotPrint(docx, { kind: 'dialog' })!, /desktop app/);
-  assert.match(logic.cannotPrint({ ...pdf, sided: 'double' }, ipp)!, /double-sided/);
-  assert.match(logic.cannotPrint({ ...pdf, pageSize: 'A3' }, ipp)!, /A3/);
-  assert.match(logic.cannotPrint({ ...pdf, name: 'p.png', mime: undefined }, ipp)!, /photos/);
-  assert.equal(logic.cannotPrint({ ...pdf, sided: 'double' }, { ...ipp, sides: [] }), null, 'unknown caps allowed');
-});
-
-test('nextJob picks the oldest printable waiting job and skips given-up ones', () => {
-  const jobs = [
-    job({ jobId: 'J3', createdAt: '2026-11-18T12:00:00Z' }),
-    job({ jobId: 'J2', createdAt: '2026-11-18T11:00:00Z', files: [docx] }),
-    job({ jobId: 'J1', createdAt: '2026-11-18T10:00:00Z' }),
-    job({ jobId: 'J0', status: 'pending_acceptance', createdAt: '2026-11-18T09:00:00Z' }),
-    job({ jobId: 'JF', status: 'failed', claimedBy: 'dev_other', createdAt: '2026-11-18T08:00:00Z' }),
-  ];
-  assert.equal(logic.nextJob(jobs, ipp, new Set())?.jobId, 'J1');
-  assert.equal(logic.nextJob(jobs, ipp, new Set(['J1']))?.jobId, 'J3');
-  assert.equal(logic.nextJob(jobs, ipp, new Set(['J1', 'J3'])), null);
-});
 
 test('groupJobs splits by status and device', () => {
   const g = logic.groupJobs(

@@ -1,26 +1,41 @@
 /**
- * This phone's role and printer. Stored on the device only.
+ * This phone's role and printers. Stored on the device only.
  *
  * - companion (default): see and accept orders, update statuses, control the
  *   desktop app. Prints nothing.
- * - station: also takes print jobs and prints them on the chosen printer while
- *   the app is open.
+ * - station: also takes print jobs and prints them on the shop's printers while
+ *   the app is open. Each file goes to a switched-on printer that can print it.
  */
+import { DEFAULT_SETTINGS, migrateSettings, setEnabled, setPreferredBw, upsertPrinter, type PrinterEntry, type Settings } from './printerModel';
 import { readJson, writeJson } from './storage';
 import { createStore } from './store';
 
-export type PrinterSetting =
-  | { kind: 'ipp'; address: string; name: string; formats: string[]; sides: string[]; colorModes: string[]; media: string[] }
-  | { kind: 'airprint'; name: string; url: string }
-  | { kind: 'dialog' };
+export type { AirPrintPrinter, DialogPrinter, IppPrinter, PrinterEntry, Settings } from './printerModel';
 
-export type Settings = { mode: 'companion' | 'station'; printer: PrinterSetting | null };
+export const settingsStore = createStore<Settings>(migrateSettings(readJson('settings', DEFAULT_SETTINGS)));
 
-const DEFAULTS: Settings = { mode: 'companion', printer: null };
-
-export const settingsStore = createStore<Settings>(readJson('settings', DEFAULTS));
-
-export function updateSettings(patch: Partial<Settings>) {
+function save(patch: Partial<Settings>) {
   settingsStore.set(patch);
   writeJson('settings', settingsStore.get());
+}
+
+export function updateSettings(patch: Partial<Settings>) {
+  save(patch);
+}
+
+/** Adds a printer, or refreshes one the phone already has (keeping its on/off and B&W choice). */
+export function savePrinter(entry: PrinterEntry) {
+  save({ printers: upsertPrinter(settingsStore.get().printers, entry) });
+}
+
+export function removePrinter(id: string) {
+  save({ printers: settingsStore.get().printers.filter((p) => p.id !== id) });
+}
+
+export function switchPrinter(id: string, on: boolean) {
+  save({ printers: setEnabled(settingsStore.get().printers, id, on) });
+}
+
+export function preferForBw(id: string, on: boolean) {
+  save({ printers: setPreferredBw(settingsStore.get().printers, id, on) });
 }

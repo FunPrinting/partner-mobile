@@ -257,6 +257,12 @@ export function capsFrom(res: IppResponse): PrinterCaps {
   };
 }
 
+/** The printer's own id, so it can be found again when its IP address changes. */
+export function printerUuid(res: IppResponse): string | undefined {
+  const v = (res.groups.printer ?? {})['printer-uuid']?.[0];
+  return typeof v === 'string' ? v.replace(/^urn:uuid:/i, '').toLowerCase() : undefined;
+}
+
 export function printerSummary(res: IppResponse) {
   const p = res.groups.printer ?? {};
   const state = Number(p['printer-state']?.[0] ?? 0);
@@ -282,6 +288,7 @@ export function printerAttributesRequest(printerUri: string) {
         values: [
           'printer-name',
           'printer-make-and-model',
+          'printer-uuid',
           'printer-state',
           'printer-state-reasons',
           'printer-is-accepting-jobs',

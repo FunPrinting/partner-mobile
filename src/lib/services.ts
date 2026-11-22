@@ -22,7 +22,7 @@ let stop: (() => void) | null = null;
 
 function updateKeepAwake() {
   const s = settingsStore.get();
-  if (s.mode === 'station' && s.printer && AppState.currentState === 'active') activateKeepAwakeAsync(KEEP_AWAKE_TAG).catch(() => undefined);
+  if (s.mode === 'station' && s.printers.some((p) => p.enabled) && AppState.currentState === 'active') activateKeepAwakeAsync(KEEP_AWAKE_TAG).catch(() => undefined);
   else deactivateKeepAwake(KEEP_AWAKE_TAG).catch(() => undefined);
 }
 

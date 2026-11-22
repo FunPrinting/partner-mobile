@@ -1,21 +1,25 @@
 /**
  * Printing on the phone.
  *
- * - ipp (Android): sends the file straight to a Wi-Fi printer over IPP, with
- *   copies / sides / colour / paper size, and waits for the printer to report
- *   the job completed. No dialog.
- * - airprint (iOS): prints to the AirPrint printer chosen once in Settings,
- *   without a dialog. iOS does not let apps set colour or double-sided here; the
- *   printer's defaults apply.
+ * - ipp (Android): sends the file straight to a Wi-Fi printer over IPP, with copies / sides /
+ *   colour / paper size, and waits for the printer to report the job completed. No dialog.
+ *   A file with colour and black-and-white pages is split into same-colour parts, printed
+ *   one after the other (like the desktop app).
+ * - airprint (iOS): prints to the AirPrint printer chosen once in Settings, without a dialog.
+ *   iOS does not let apps set colour or double-sided here; the printer's defaults apply.
  * - dialog: the system print dialog for each file; the shop confirms it printed.
+ *
+ * Every file is the server's print-ready PDF (`printUrl`): Word files and photos are
+ * converted when they are uploaded.
  */
 import { fetch as expoFetch } from 'expo/fetch';
 import { Directory, File, Paths } from 'expo-file-system';
 import * as Print from 'expo-print';
 import * as ipp from './ipp';
-import { base64 } from './encoding';
-import { fileKind, KIND_MIME, type JobFile } from './jobLogic';
-import type { PrinterSetting } from './settings';
+import type { JobFile } from './jobLogic';
+import { extractPages, pageCount } from './pdfPages';
+import type { PrinterEntry } from './printerModel';
+import { isWholeFile, planRuns } from './runs';
 
 const IPP_TIMEOUT_MS = 30_000;
 const JOB_WAIT_MS = 10 * 60_000;
@@ -41,7 +45,7 @@ export async function checkIppPrinter(address: string) {
   const urls = ipp.printerUrls(address);
   const res = await ippCall(urls.http, ipp.printerAttributesRequest(urls.ipp), 8000);
   if (!ipp.isSuccess(res.statusCode)) throw new Error(`Printer refused: ${ipp.statusText(res.statusCode)}`);
-  return { summary: ipp.printerSummary(res), caps: ipp.capsFrom(res) };
+  return { summary: ipp.printerSummary(res), caps: ipp.capsFrom(res), uuid: ipp.printerUuid(res), urls };
 }
 
 /** iOS: pick an AirPrint printer once; later jobs print to it without a dialog. */
@@ -53,10 +57,12 @@ export async function chooseAirPrintPrinter() {
 const downloads = new Directory(Paths.cache, 'print-jobs');
 
 export async function downloadJobFile(file: JobFile, key: string): Promise<File> {
-  if (!/^https:\/\//i.test(file.url)) throw new Error('File link is not secure');
+  const url = file.printUrl;
+  if (!url) throw new Error('The file is still being prepared on the server');
+  if (!/^https:\/\//i.test(url)) throw new Error('File link is not secure');
   if (!downloads.exists) downloads.create({ intermediates: true });
-  const target = new File(downloads, `${key.replace(/[^A-Za-z0-9_-]/g, '_')}.${fileKind(file) === 'other' ? 'bin' : fileKind(file)}`);
-  return File.downloadFileAsync(file.url, target, { idempotent: true });
+  const target = new File(downloads, `${key.replace(/[^A-Za-z0-9_-]/g, '_')}.pdf`);
+  return File.downloadFileAsync(url, target, { idempotent: true });
 }
 
 export function clearDownloads() {
@@ -65,10 +71,6 @@ export function clearDownloads() {
   } catch {
     // nothing to clear
   }
-}
-
-function imageHtml(dataUri: string) {
-  return `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"><style>@page{margin:0}html,body{margin:0;height:100%}img{width:100%;height:100%;object-fit:contain}</style></head><body><img src="${dataUri}"></body></html>`;
 }
 
 async function waitForIppJob(urls: { ipp: string; http: string }, jobId: number, onStatus: (s: string) => void) {
@@ -95,34 +97,49 @@ async function waitForIppJob(urls: { ipp: string; http: string }, jobId: number,
 }
 
 /**
- * Prints one downloaded file. Resolves when printed (ipp/airprint) or when the
- * dialog was used (dialog: the caller asks the shop to confirm).
+ * Prints one downloaded PDF. Resolves when printed (ipp/airprint) or when the dialog was
+ * used (dialog: the caller asks the shop to confirm).
  */
-export async function printFile(printer: PrinterSetting, file: File, opts: JobFile, jobName: string, onStatus: (s: string) => void) {
-  const kind = fileKind(opts);
-  if (kind === 'other') throw new Error('This file type needs the desktop app');
-
+export async function printFile(printer: PrinterEntry, file: File, opts: JobFile, jobName: string, onStatus: (s: string) => void) {
   if (printer.kind === 'ipp') {
     const urls = ipp.printerUrls(printer.address);
     const caps = { formats: printer.formats, sides: printer.sides, colorModes: printer.colorModes, media: printer.media };
-    onStatus('Sending to printer…');
-    const res = await ippCall(
-      urls.http,
-      ipp.printJobRequest({ printerUri: urls.ipp, jobName, format: KIND_MIME[kind], jobAttrs: ipp.jobAttributes(opts, caps), data: await file.bytes() }),
-      120_000
-    );
-    if (!ipp.isSuccess(res.statusCode)) throw new Error(`Printer refused the job: ${ipp.statusText(res.statusCode)}`);
-    const printerJobId = Number(res.groups.job?.['job-id']?.[0] ?? 0);
-    if (printerJobId) await waitForIppJob(urls, printerJobId, onStatus);
+    const bytes = await file.bytes();
+    let pages = Math.max(1, opts.pages || 1);
+    try {
+      pages = await pageCount(bytes);
+    } catch {
+      // keep the server's page count; the file is sent whole below
+    }
+    const runs = planRuns({ pageCount: pages, colour: opts.color ?? 'bw', colorPages: opts.colorPages, duplex: opts.sided === 'double', copies: opts.copies ?? 1 });
+    for (let i = 0; i < runs.length; i++) {
+      const run = runs[i];
+      const part = runs.length > 1 ? `part ${i + 1} of ${runs.length} (${run.colour === 'color' ? 'colour' : 'B&W'})` : '';
+      onStatus(part ? `Sending ${part}…` : 'Sending to printer…');
+      const data = isWholeFile(run, pages) ? bytes : await extractPages(bytes, run.pages);
+      const res = await ippCall(
+        urls.http,
+        ipp.printJobRequest({
+          printerUri: urls.ipp,
+          jobName: runs.length > 1 ? `${jobName} (${i + 1}/${runs.length})` : jobName,
+          format: 'application/pdf',
+          jobAttrs: ipp.jobAttributes({ copies: run.copies, sided: opts.sided, color: run.colour, pageSize: opts.pageSize }, caps),
+          data: data as Uint8Array<ArrayBuffer>,
+        }),
+        120_000
+      );
+      if (!ipp.isSuccess(res.statusCode)) throw new Error(`Printer refused the job: ${ipp.statusText(res.statusCode)}`);
+      const printerJobId = Number(res.groups.job?.['job-id']?.[0] ?? 0);
+      if (printerJobId) await waitForIppJob(urls, printerJobId, (s) => onStatus(part ? `${s} ${part}` : s));
+    }
     return;
   }
 
   const copies = Math.max(1, Math.min(20, opts.copies || 1));
   const printerUrl = printer.kind === 'airprint' ? printer.url : undefined;
-  const source = kind === 'pdf' ? { uri: file.uri } : { html: imageHtml(`data:${KIND_MIME[kind]};base64,${base64(await file.bytes())}`) };
   // AirPrint and the dialog take one copy at a time
   for (let i = 0; i < (printerUrl ? copies : 1); i++) {
     onStatus(copies > 1 && printerUrl ? `Printing copy ${i + 1} of ${copies}…` : 'Printing…');
-    await Print.printAsync({ ...source, printerUrl });
+    await Print.printAsync({ uri: file.uri, printerUrl });
   }
 }

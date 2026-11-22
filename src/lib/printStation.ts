@@ -12,11 +12,14 @@
  */
 import { Alert, AppState } from 'react-native';
 import { reportError } from './errors';
-import { cannotPrintJob, nextJob, type Job, type PrintMethod } from './jobLogic';
+import { cannotPrintJob, nextJob, type Job } from './jobLogic';
 import { jobsStore, syncJobs } from './jobs';
+import { refindPrinter } from './findPrinters';
 import { clearDownloads, downloadJobFile, printFile } from './printers';
 import { api, deviceId, NotSignedInError } from './session';
-import { settingsStore, type PrinterSetting } from './settings';
+import { printerLabel, routerPrinter, type PrinterEntry } from './printerModel';
+import { choosePrinter } from './router';
+import { settingsStore } from './settings';
 import { readJson, writeJson } from './storage';
 import { createStore } from './store';
 
@@ -53,25 +56,20 @@ function setStatus(status: string) {
   if (cur) stationStore.set({ current: { ...cur, status } });
 }
 
-function methodOf(p: PrinterSetting): PrintMethod {
-  return p.kind === 'ipp' ? { kind: 'ipp', formats: p.formats, sides: p.sides, colorModes: p.colorModes, media: p.media } : { kind: p.kind };
-}
+const switchedOn = () => settingsStore.get().printers.filter((p) => p.enabled);
 
 function enabled() {
   const s = settingsStore.get();
-  return s.mode === 'station' && Boolean(s.printer) && AppState.currentState === 'active' && Boolean(deviceId());
+  return s.mode === 'station' && s.printers.some((p) => p.enabled) && AppState.currentState === 'active' && Boolean(deviceId());
 }
 
 const jobPath = (id: string) => `/api/partner/v1/jobs/${encodeURIComponent(id)}`;
 
-/** Shown to the shop as "Printed on <phone> · <printer>". */
-function printerLabel(p: PrinterSetting | null): string | undefined {
-  if (!p) return undefined;
-  return p.kind === 'dialog' ? 'System print dialog' : p.name || undefined;
-}
+/** Printers used so far for the current job, shown to the shop as "Printed on <phone> · <printer>". */
+let usedPrinters: string[] = [];
 
 function report(jobId: string, status: string, error?: string) {
-  const printer = printerLabel(settingsStore.get().printer);
+  const printer = usedPrinters.join(', ') || printerLabel(switchedOn()[0]);
   return api(jobPath(jobId), { method: 'POST', body: { action: 'report', status, ...(error ? { error: error.slice(0, 500) } : {}), ...(printer ? { printer: printer.slice(0, 200) } : {}) } });
 }
 
@@ -130,9 +128,10 @@ function confirm(title: string, message: string, buttons: { text: string; value:
 }
 
 /** Prints the current job's remaining files. Returns when finished or stopped. */
-async function printCurrent(printer: PrinterSetting) {
+async function printCurrent() {
   const cur = saved.current!;
   const job = cur.job;
+  usedPrinters = [];
   startHeartbeat(job.jobId);
   for (let i = 0; i < job.files.length; i++) {
     if (cur.done.includes(i)) continue;
@@ -141,8 +140,21 @@ async function printCurrent(printer: PrinterSetting) {
     stationStore.set({ current: { jobId: job.jobId, label, file: i + 1, files: job.files.length, status: 'Downloading…' } });
     let lastError = '';
     let printed = false;
+    let printer: PrinterEntry = switchedOn()[0];
+    const failedOn: string[] = [];
     for (let attempt = 1; attempt <= FILE_ATTEMPTS && !printed; attempt++) {
       try {
+        // Each attempt picks a printer that can do this file, leaving out ones that just failed
+        let choice = choosePrinter(file, switchedOn().map(routerPrinter), { exclude: failedOn });
+        if (!('printer' in choice)) {
+          failedOn.length = 0;
+          choice = choosePrinter(file, switchedOn().map(routerPrinter));
+        }
+        if (!('printer' in choice)) throw new Error(choice.reason);
+        const picked = switchedOn().find((p) => p.id === choice.printer.id);
+        if (!picked) throw new Error('The printer was switched off');
+        printer = picked;
+        if (!usedPrinters.includes(printer.name)) usedPrinters.push(printer.name);
         const local = await downloadJobFile(file, `${job.jobId}_${i}`);
         await printFile(printer, local, file, `${label} ${file.name}`.slice(0, 100), setStatus);
         if (printer.kind === 'dialog') {
@@ -163,6 +175,17 @@ async function printCurrent(printer: PrinterSetting) {
         printed = true;
       } catch (err) {
         lastError = err instanceof Error ? err.message : String(err);
+        failedOn.push(printer.id);
+        // The printer may have a new IP address (router restart): look for it by its own id and retry
+        if (printer.kind === 'ipp' && /not reachable/i.test(lastError)) {
+          const moved = await refindPrinter(printer).catch(() => null);
+          if (moved) {
+            setStatus('Found the printer at a new address');
+            failedOn.pop();
+            attempt--;
+            continue;
+          }
+        }
         // iOS: closing the dialog without printing
         if (printer.kind === 'dialog' && /cancel/i.test(lastError)) {
           const answer = await confirm('Printing cancelled', 'Give this order back to the queue for another device, or try again?', [
@@ -222,25 +245,24 @@ async function reconcile(): Promise<boolean> {
 }
 
 async function round(): Promise<boolean> {
-  const printer = settingsStore.get().printer;
-  if (!printer) return false;
+  const printers = switchedOn().map(routerPrinter);
+  if (!printers.length) return false;
   await flushReports();
   if (saved.current && (await reconcile())) {
-    await printCurrent(printer);
+    await printCurrent();
     return true;
   }
   if (Date.now() < cooldownUntil) return false;
-  const method = methodOf(printer);
   const jobs = jobsStore.get().jobs;
   // Remember why jobs are left for a computer, for the jobs list
   const reasons: Record<string, string> = {};
   for (const j of jobs) {
     if (j.status !== 'queued' && j.status !== 'failed') continue;
-    const r = cannotPrintJob(j, method);
+    const r = cannotPrintJob(j, printers);
     if (r) reasons[j.jobId] = r;
   }
   stationStore.set({ skipped: reasons });
-  const candidate = nextJob(jobs, method, new Set(Object.keys(reasons)));
+  const candidate = nextJob(jobs, printers, new Set(Object.keys(reasons)));
   if (!candidate) return false;
   const res = await api<{ job?: Job; error?: string }>(jobPath(candidate.jobId), { method: 'POST', body: { action: 'claim' } });
   if (!res.ok || !res.data.job) {
@@ -251,7 +273,7 @@ async function round(): Promise<boolean> {
   persist();
   report(candidate.jobId, 'printing').catch(() => undefined);
   await syncJobs();
-  await printCurrent(printer);
+  await printCurrent();
   return true;
 }
 

@@ -10,11 +10,26 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.funprinting.partner",
-      "config": { "usesNonExemptEncryption": false }
+      "config": {
+        "usesNonExemptEncryption": false
+      },
+      "infoPlist": {
+        "NSLocalNetworkUsageDescription": "Finds Wi-Fi printers on your network so this phone can print your shop's orders.",
+        "NSBonjourServices": [
+          "_ipp._tcp",
+          "_ipps._tcp"
+        ],
+        "NSAppTransportSecurity": {
+          "NSAllowsLocalNetworking": true
+        }
+      }
     },
     "android": {
       "package": "com.funprinting.partner",
-      "permissions": ["REQUEST_INSTALL_PACKAGES", "INTERNET"],
+      "permissions": [
+        "REQUEST_INSTALL_PACKAGES",
+        "INTERNET"
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",

@@ -3,8 +3,12 @@
  * Job shape: FunPrinting-Web src/lib/jobs/http.ts publicJob().
  */
 
+import { whyImpossible, type RouterPrinter } from './router.ts';
+
 export type JobFile = {
   url: string;
+  /** The PDF this phone prints (the server converts Word files and photos). */
+  printUrl?: string;
   name: string;
   mime?: string;
   pages?: number;
@@ -55,45 +59,31 @@ export function fileKind(file: Pick<JobFile, 'name' | 'mime' | 'url'>): FileKind
   return EXT_KIND[ext(path)] ?? 'other';
 }
 
-export type PrintMethod =
-  | { kind: 'ipp'; formats: string[]; sides: string[]; colorModes: string[]; media: string[] }
-  | { kind: 'airprint' }
-  | { kind: 'dialog' };
-
 /**
- * Why this phone can't print the file, or null. Files it can't print stay in the
- * shop's queue for a computer (Word files, for example, need the desktop app).
+ * Why this phone can't print the file, or null. Files it can't print stay in the shop's
+ * queue for a computer. Printers are the phone's own (switched on or off in Settings).
  */
-export function cannotPrint(file: JobFile, method: PrintMethod): string | null {
-  const kind = fileKind(file);
-  if (kind === 'other') return 'This file type needs the desktop app';
-  if (method.kind !== 'ipp') return null;
-  const mime = KIND_MIME[kind];
-  if (method.formats.length && !method.formats.includes(mime)) {
-    return kind === 'pdf' ? 'This printer does not accept PDF over Wi-Fi' : 'This printer does not accept photos over Wi-Fi';
-  }
-  if (file.sided === 'double' && method.sides.length && !method.sides.some((s) => s.startsWith('two-sided'))) return 'Needs double-sided printing';
-  if ((file.color === 'color' || file.color === 'mixed') && method.colorModes.length && !method.colorModes.includes('color')) return 'Needs colour printing';
-  const media = file.pageSize === 'A3' ? 'iso_a3_297x420mm' : 'iso_a4_210x297mm';
-  if (method.media.length && !method.media.includes(media)) return `Needs ${file.pageSize || 'A4'} paper`;
-  return null;
+export function cannotPrint(file: JobFile, printers: RouterPrinter[]): string | null {
+  if (!file.printUrl) return 'The file is still being prepared';
+  const why = whyImpossible(file, printers);
+  return why;
 }
 
-export function cannotPrintJob(job: Job, method: PrintMethod): string | null {
+export function cannotPrintJob(job: Job, printers: RouterPrinter[]): string | null {
   if (!job.files?.length) return 'This job has no files';
   for (const f of job.files) {
-    const reason = cannotPrint(f, method);
+    const reason = cannotPrint(f, printers);
     if (reason) return reason;
   }
   return null;
 }
 
 /** The oldest waiting job this phone can print, skipping ones it already gave up on. */
-export function nextJob(jobs: Job[], method: PrintMethod, skip: ReadonlySet<string>): Job | null {
+export function nextJob(jobs: Job[], printers: RouterPrinter[], skip: ReadonlySet<string>): Job | null {
   const waiting = jobs
     .filter((j) => (j.status === 'queued' || (j.status === 'failed' && !j.claimedBy)) && !skip.has(j.jobId))
     .sort((a, b) => String(a.createdAt ?? '').localeCompare(String(b.createdAt ?? '')));
-  return waiting.find((j) => !cannotPrintJob(j, method)) ?? null;
+  return waiting.find((j) => !cannotPrintJob(j, printers)) ?? null;
 }
 
 export type JobGroups = { pending: Job[]; mine: Job[]; waiting: Job[]; elsewhere: Job[] };
