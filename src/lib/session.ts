@@ -213,7 +213,7 @@ export async function api<T = any>(path: string, init: { method?: string; body?:
   const send = async (token: string) => {
     const res = await fetch(`${WEB_URL}${path}`, {
       method: init.method ?? 'GET',
-      headers: { Authorization: `Bearer ${token}`, ...(init.body !== undefined ? { 'Content-Type': 'application/json' } : {}) },
+      headers: { Authorization: `Bearer ${token}`, 'X-App-Platform': 'mobile', 'X-App-Version': Constants.expoConfig?.version ?? '0.0.0', ...(init.body !== undefined ? { 'Content-Type': 'application/json' } : {}) },
       body: init.body !== undefined ? JSON.stringify(init.body) : undefined,
       signal: AbortSignal.timeout(init.timeoutMs ?? TIMEOUT_MS),
     });
