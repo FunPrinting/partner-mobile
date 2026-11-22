@@ -16,7 +16,7 @@ import { reportError } from './errors';
 import { cannotPrintJob, nextJob, type Job } from './jobLogic';
 import { jobsStore, syncJobs } from './jobs';
 import { refindPrinter } from './findPrinters';
-import { clearDownloads, downloadJobFile, printFile } from './printers';
+import { clearDownloads, downloadJobFile, printFile, printOrderSummary } from './printers';
 import { api, deviceId, NotSignedInError } from './session';
 import { printerLabel, routerPrinter, type PrinterEntry } from './printerModel';
 import { choosePrinter } from './router';
@@ -235,6 +235,19 @@ async function printCurrent() {
     }
     cur.done.push(i);
     persist();
+  }
+  const s = settingsStore.get();
+  if (s.summarySlip !== false && switchedOn().length > 0) {
+    try {
+      setStatus('Printing order summary…');
+      const summaryPrinter = switchedOn().find((p) => usedPrinters.includes(p.name)) || switchedOn()[0];
+      await printOrderSummary(summaryPrinter, job, setStatus);
+    } catch (summaryErr) {
+      reportError(new Error(`Order summary slip failed: ${summaryErr instanceof Error ? summaryErr.message : String(summaryErr)}`), {
+        level: 'warning',
+        context: { jobId: job.jobId },
+      });
+    }
   }
   finish(job, 'printed');
 }

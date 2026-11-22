@@ -87,17 +87,25 @@ export default function SettingsScreen() {
         <Card>
           <SwitchRow first title="Print station" subtitle="Print orders from this phone" value={settings.mode === 'station'} onValueChange={setStation} />
           {settings.mode === 'station' ? (
-            <SwitchRow
-              title="Keep running in background"
-              subtitle="Continue checking orders and printing when minimized"
-              value={Boolean(settings.runInBackground)}
-              onValueChange={async (on) => {
-                if (on && Platform.OS === 'android') {
-                  await requestNotificationPermission().catch(() => undefined);
-                }
-                updateSettings({ runInBackground: on });
-              }}
-            />
+            <>
+              <SwitchRow
+                title="Keep running in background"
+                subtitle="Continue checking orders and printing when minimized"
+                value={Boolean(settings.runInBackground)}
+                onValueChange={async (on) => {
+                  if (on && Platform.OS === 'android') {
+                    await requestNotificationPermission().catch(() => undefined);
+                  }
+                  updateSettings({ runInBackground: on });
+                }}
+              />
+              <SwitchRow
+                title="Print order summary slip"
+                subtitle="Prints an order ticket on top of the tray when finished"
+                value={settings.summarySlip !== false}
+                onValueChange={(on) => updateSettings({ summarySlip: on })}
+              />
+            </>
           ) : null}
         </Card>
       </Section>

@@ -12,7 +12,7 @@ import type { FoundPrinter } from '@/lib/discovery';
 import { canSearch, findPrinters } from '@/lib/findPrinters';
 import { chooseAirPrintPrinter, checkIppPrinter, printFile } from '@/lib/printers';
 import type { IppPrinter, PrinterEntry } from '@/lib/printerModel';
-import { changePrinterDpi, preferForBw, removePrinter, savePrinter, settingsStore, switchPrinter } from '@/lib/settings';
+import { changePrinterDpi, changePrinterReverseOrder, preferForBw, removePrinter, savePrinter, settingsStore, switchPrinter } from '@/lib/settings';
 import { useStore } from '@/lib/store';
 import { space } from '@/theme';
 
@@ -23,11 +23,12 @@ function abilities(p: PrinterEntry): string {
   if (p.kind === 'airprint') return 'AirPrint · uses the printer\'s own settings';
   const isRaster = !p.formats.includes('application/pdf') && p.formats.includes('image/pwg-raster');
   const dpiText = p.kind === 'ipp' ? `${p.dpi || 300} DPI` : '';
+  const orderText = p.kind === 'ipp' && p.reverseOrder === false ? '1→N' : 'LIFO';
   const out = [
     p.colorModes.length ? (p.colorModes.includes('color') ? 'Colour' : 'B&W only') : '',
     p.sides.length ? (p.sides.some((s) => s.startsWith('two-sided')) ? 'Double-sided' : 'Single-sided') : '',
     p.media.includes('iso_a3_297x420mm') ? 'A3' : '',
-    isRaster ? `Direct Host (${dpiText})` : dpiText,
+    isRaster ? `Direct Host (${dpiText} · ${orderText})` : dpiText,
   ];
   return out.filter(Boolean).join(' · ') || 'Wi-Fi';
 }
@@ -190,6 +191,12 @@ export default function PrinterSetup() {
                       );
                     })}
                   </View>
+                  <SwitchRow
+                    title="LIFO stack order (Page N to 1)"
+                    subtitle="Prints last page first so Page 1 lands on top of face-up output trays"
+                    value={p.reverseOrder !== false}
+                    onValueChange={(on) => changePrinterReverseOrder(p.id, on)}
+                  />
                 </View>
               ) : null}
             </View>

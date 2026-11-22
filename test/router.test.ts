@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { choosePrinter, whyImpossible, type RouterPrinter } from '../src/lib/router.ts';
 import { planRuns, isWholeFile } from '../src/lib/runs.ts';
-import { migrateSettings, routerPrinter, upsertPrinter, setPreferredBw, setEnabled, setPrinterDpi, type IppPrinter, type PrinterEntry } from '../src/lib/printerModel.ts';
+import { migrateSettings, routerPrinter, upsertPrinter, setPreferredBw, setEnabled, setPrinterDpi, setPrinterReverseOrder, type IppPrinter, type PrinterEntry } from '../src/lib/printerModel.ts';
 import * as logic from '../src/lib/jobLogic.ts';
 
 const colour: RouterPrinter = { id: 'c', name: 'Colour', enabled: true, caps: { color: true, duplex: false, a3: false, pdf: true } };
@@ -116,4 +116,20 @@ test('runInBackground preserves setting in migrateSettings', () => {
   assert.equal(s.runInBackground, true);
   const def = migrateSettings({ mode: 'companion' });
   assert.equal(def.runInBackground, undefined);
+});
+
+test('reverseOrder setting updates entry and upsert preserves it', () => {
+  const p: PrinterEntry = { ...ipp, id: 'p1', reverseOrder: true };
+  const updated = setPrinterReverseOrder([p], 'p1', false);
+  assert.equal((updated[0] as IppPrinter).reverseOrder, false);
+  const refreshed = upsertPrinter(updated, { ...ipp, id: 'p1', address: 'ipp://10.0.0.50:631/ipp/print' });
+  assert.equal((refreshed[0] as IppPrinter).reverseOrder, false);
+});
+
+test('summarySlip preserves setting in migrateSettings', () => {
+  const s = migrateSettings({ mode: 'station', printers: [], summarySlip: false });
+  assert.equal(s.mode, 'station');
+  assert.equal(s.summarySlip, false);
+  const def = migrateSettings({ mode: 'companion' });
+  assert.equal(def.summarySlip, undefined);
 });

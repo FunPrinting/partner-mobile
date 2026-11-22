@@ -140,7 +140,8 @@ object PwgRasterEncoder {
     dpi: Int = 300,
     isColor: Boolean = true,
     isDuplex: Boolean = false,
-    pageSizeName: String = "iso_a4_210x297mm"
+    pageSizeName: String = "iso_a4_210x297mm",
+    reverseOrder: Boolean = true
   ) {
     val uri = if (pdfFileOrUri.startsWith("content://") || pdfFileOrUri.startsWith("file://")) {
       Uri.parse(pdfFileOrUri)
@@ -171,11 +172,31 @@ object PwgRasterEncoder {
         throw IllegalArgumentException("No valid pages to print (document has $totalDocPages pages)")
       }
 
+      // LIFO Stack page ordering for face-up printer output (e.g. Epson L3250):
+      // When reverseOrder is true, print from Page N down to Page 1 so Page 1 finishes on top of the tray.
+      val orderedPages = if (reverseOrder) {
+        if (isDuplex && targetPages.size > 1) {
+          // For duplex, reverse by 2-page sheet units (Sheet K, Sheet K-1, ..., Sheet 1)
+          val sheets = mutableListOf<List<Int>>()
+          var idx = 0
+          while (idx < targetPages.size) {
+            val sheet = if (idx + 1 < targetPages.size) listOf(targetPages[idx], targetPages[idx + 1]) else listOf(targetPages[idx])
+            sheets.add(sheet)
+            idx += 2
+          }
+          sheets.reversed().flatten()
+        } else {
+          targetPages.reversed()
+        }
+      } else {
+        targetPages
+      }
+
       // 1. Write the 4-byte PWG file synchronization word
       outputStream.write(SYNC_WORD)
 
       // 2. Encode each page
-      for (pageIdx in targetPages) {
+      for (pageIdx in orderedPages) {
         val page = renderer.openPage(pageIdx)
         val widthPt = page.width
         val heightPt = page.height

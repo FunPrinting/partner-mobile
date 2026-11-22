@@ -31,6 +31,8 @@ export type PrintRasterOptions = {
   jobName?: string;
   pages?: number[];
   dpi?: number;
+  /** Prints pages in LIFO stack order (Page N down to Page 1) for face-up inkjet output trays. */
+  reverseOrder?: boolean;
 };
 
 export type PrintRasterResult = {

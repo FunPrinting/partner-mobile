@@ -190,6 +190,7 @@ object IppClient {
     val pageSize = (options["pageSize"] as? String) ?: "A4"
     val jobName = (options["jobName"] as? String) ?: "FunPrinting Job"
     val dpi = ((options["dpi"] as? Number)?.toInt() ?: 300).coerceIn(150, 600)
+    val reverseOrder = (options["reverseOrder"] as? Boolean) ?: true
 
     val pages = (options["pages"] as? List<*>)?.mapNotNull { (it as? Number)?.toInt() }
 
@@ -225,7 +226,8 @@ object IppClient {
           dpi = dpi,
           isColor = (color != "bw"),
           isDuplex = (sided == "double"),
-          pageSizeName = if (pageSize == "A3") "iso_a3_297x420mm" else "iso_a4_210x297mm"
+          pageSizeName = if (pageSize == "A3") "iso_a3_297x420mm" else "iso_a4_210x297mm",
+          reverseOrder = reverseOrder
         )
 
         conn.outputStream.flush()

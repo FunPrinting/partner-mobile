@@ -17,9 +17,10 @@ import { Directory, File, Paths } from 'expo-file-system';
 import * as Print from 'expo-print';
 import { isAvailable, probePrinter, sendIpp, printRaster, getJobStatus } from '../../modules/printer-discovery';
 import * as ipp from './ipp';
-import type { JobFile } from './jobLogic';
+import type { Job, JobFile } from './jobLogic';
 import type { IppPrinter, PrinterEntry } from './printerModel';
 import { isWholeFile, planRuns } from './runs';
+import { renderOrderSummaryPdf } from './summary';
 
 const IPP_TIMEOUT_MS = 30_000;
 const JOB_WAIT_MS = 10 * 60_000;
@@ -237,6 +238,7 @@ export async function printFile(printer: PrinterEntry, file: File, opts: JobFile
         pageSize: opts.pageSize,
         dpi: (printer as IppPrinter).dpi || 300,
         jobName,
+        reverseOrder: (printer as IppPrinter).reverseOrder !== false,
       });
       if (rasterRes.jobId) {
         await waitForIppJob(urls, rasterRes.jobId, onStatus);
@@ -285,4 +287,52 @@ export async function printFile(printer: PrinterEntry, file: File, opts: JobFile
     onStatus(copies > 1 && printerUrl ? `Printing copy ${i + 1} of ${copies}…` : 'Printing…');
     await Print.printAsync({ uri: file.uri, printerUrl });
   }
+}
+
+/**
+ * Prints an A4 Order Summary Slip (ticket) after the document.
+ * Because face-up trays (like Epson L3250) stack LIFO, printing this last places
+ * it right on top of the physical tray for the shop and customer.
+ */
+export async function printOrderSummary(printer: PrinterEntry, job: Job, onStatus: (s: string) => void) {
+  const bytes = await renderOrderSummaryPdf(job);
+  if (!downloads.exists) downloads.create({ intermediates: true });
+  const summaryFile = new File(downloads, `summary_${job.jobId.replace(/[^A-Za-z0-9_-]/g, '_')}.pdf`);
+  summaryFile.write(bytes);
+
+  const jobFile: JobFile = {
+    name: `Order Summary #${job.deliveryNumber || job.orderId}`,
+    url: summaryFile.uri,
+    printUrl: summaryFile.uri,
+    pages: 1,
+    pageSize: 'A4',
+    sided: 'single',
+    color: 'bw',
+    copies: 1,
+  };
+
+  if (printer.kind === 'ipp') {
+    const urls = ipp.printerUrls(printer.address);
+    const caps = { formats: printer.formats, sides: printer.sides, colorModes: printer.colorModes, media: printer.media };
+    const isRasterPrinter = !caps.formats.includes('application/pdf') && caps.formats.includes('image/pwg-raster');
+
+    if (isRasterPrinter && isAvailable) {
+      onStatus('Printing order summary…');
+      const rasterRes = await printRaster(urls.http, summaryFile.uri, {
+        copies: 1,
+        sided: 'single',
+        color: 'bw',
+        pageSize: 'A4',
+        dpi: (printer as IppPrinter).dpi || 300,
+        jobName: `Summary #${job.deliveryNumber || job.orderId}`,
+        reverseOrder: false,
+      });
+      if (rasterRes.jobId) {
+        await waitForIppJob(urls, rasterRes.jobId, onStatus);
+      }
+      return;
+    }
+  }
+
+  await printFile(printer, summaryFile, jobFile, `Summary #${job.deliveryNumber || job.orderId}`, onStatus);
 }
