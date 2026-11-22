@@ -84,11 +84,11 @@ function createPageHeader(opts: {
   header.writeUInt32BE(opts.widthPixels, 372);
   header.writeUInt32BE(opts.heightPixels, 376);
   header.writeUInt32BE(8, 384);
-  header.writeUInt32BE(24, 388);
-  header.writeUInt32BE(opts.widthPixels * 3, 392);
+  header.writeUInt32BE(opts.isColor ? 24 : 8, 388);
+  header.writeUInt32BE(opts.widthPixels * (opts.isColor ? 3 : 1), 392);
   header.writeUInt32BE(0, 396);
-  header.writeUInt32BE(19, 400); // CUPS_CSPACE_SRGB
-  header.writeUInt32BE(3, 420);
+  header.writeUInt32BE(opts.isColor ? 19 : 18, 400); // 19 = sRGB, 18 = sGray
+  header.writeUInt32BE(opts.isColor ? 3 : 1, 420);
   header.writeFloatBE(opts.pageWidthPoints, 428);
   header.writeFloatBE(opts.pageHeightPoints, 432);
   header.writeFloatBE(0, 436);
@@ -271,6 +271,8 @@ interface FakePrintJob {
   pageHeightPt: number;
   dpi: number;
   isColor: boolean;
+  colorMode?: 'bw' | 'color' | 'mixed';
+  colorPages?: number[];
   isDuplex: boolean;
   pageSizeName: string;
   reverseOrder: boolean;
@@ -310,15 +312,31 @@ async function fakePrint(job: FakePrintJob): Promise<FakePrintResult> {
   );
 
   // Build PWG headers
+  const inColor = job.colorPages ? new Set(job.colorPages.filter(p => p >= 1)) : null;
   const pageResults: { originalPageIndex: number; header: PageHeader }[] = [];
   for (const pageIdx of orderedPages) {
+    const docPageNum = pageIdx + 1;
+    let pageIsColor = job.isColor;
+    if (job.colorMode === 'bw') {
+      pageIsColor = false;
+    } else if (job.colorMode === 'color') {
+      pageIsColor = true;
+    } else if (job.colorMode === 'mixed' && inColor !== null) {
+      if (job.isDuplex) {
+        const sheetStart = docPageNum % 2 === 1 ? docPageNum : docPageNum - 1;
+        pageIsColor = inColor.has(sheetStart) || inColor.has(sheetStart + 1);
+      } else {
+        pageIsColor = inColor.has(docPageNum);
+      }
+    }
+
     const headerBuf = createPageHeader({
       widthPixels: widthPx,
       heightPixels: heightPx,
       pageWidthPoints: Math.round(media.widthPt),
       pageHeightPoints: Math.round(media.heightPt),
       dpi: job.dpi,
-      isColor: job.isColor,
+      isColor: pageIsColor,
       isDuplex: job.isDuplex,
       pageSizeName: job.pageSizeName,
       totalPages: targetPages.length,
@@ -511,12 +529,83 @@ describe(`Fake Printer · Order ${ORDER_ID} · 7-page A4 Mixed Colour document`,
       assert.equal(p.header.bitsPerPixel, 24, 'Universal 24-bit sRGB');
       assert.equal(p.header.colorSpace, 19, 'CUPS_CSPACE_SRGB');
       assert.equal(p.header.numColors, 3);
+      assert.equal(p.header.bytesPerLine, 2480 * 3, 'bytesPerLine = width * 3');
       assert.equal(p.header.colorOrder, 0, 'CUPS_ORDER_CHUNKED');
       assert.equal(p.header.crossFeedTransform, 1);
       assert.equal(p.header.feedTransform, 1);
       assert.equal(p.header.printQuality, 4, 'Normal quality');
       assert.equal(p.header.totalPages, 2);
       assert.equal(p.header.pageSizeName, 'iso_a4_210x297mm');
+    }
+  });
+
+  test('Pure B&W order: 8-bit sGray header engages 180 black nozzles (~16 scrolls)', async () => {
+    const result = await fakePrint({
+      orderId: ORDER_ID, pageCount: 3, pageWidthPt: 595.28, pageHeightPt: 841.89,
+      dpi: 300, isColor: false, colorMode: 'bw', isDuplex: false, pageSizeName: 'iso_a4_210x297mm',
+      reverseOrder: false, scaling: 'fit',
+    });
+    for (const p of result.pages) {
+      assert.equal(p.header.bitsPerColor, 8);
+      assert.equal(p.header.bitsPerPixel, 8, '8-bit native sGray (1 byte per pixel)');
+      assert.equal(p.header.colorSpace, 18, 'CUPS_CSPACE_SW (sGray)');
+      assert.equal(p.header.numColors, 1, 'Single color channel');
+      assert.equal(p.header.bytesPerLine, 2480 * 1, 'bytesPerLine = width * 1 (66% smaller than sRGB)');
+    }
+  });
+
+  test('Mixed order: dynamic per-page color headers in single cohesive job (zero fraud)', async () => {
+    // 7-page document with color on pages 1 and 3 only (like a real report/thesis)
+    const result = await fakePrint({
+      orderId: ORDER_ID, pageCount: 7, pageWidthPt: 595.28, pageHeightPt: 841.89,
+      dpi: 300, isColor: true, colorMode: 'mixed', colorPages: [1, 3], isDuplex: false,
+      pageSizeName: 'iso_a4_210x297mm', reverseOrder: false, scaling: 'fit',
+    });
+    assert.equal(result.pages.length, 7);
+
+    // Page 1 (originalPageIndex 0): Color -> 24-bit sRGB
+    assert.equal(result.pages[0].header.colorSpace, 19, 'Page 1 is color (sRGB)');
+    assert.equal(result.pages[0].header.bitsPerPixel, 24);
+    assert.equal(result.pages[0].header.bytesPerLine, 2480 * 3);
+
+    // Page 2 (originalPageIndex 1): B&W -> 8-bit sGray (180 black nozzles, ~16 scrolls)
+    assert.equal(result.pages[1].header.colorSpace, 18, 'Page 2 is B&W (sGray)');
+    assert.equal(result.pages[1].header.bitsPerPixel, 8);
+    assert.equal(result.pages[1].header.bytesPerLine, 2480);
+
+    // Page 3 (originalPageIndex 2): Color -> 24-bit sRGB
+    assert.equal(result.pages[2].header.colorSpace, 19, 'Page 3 is color (sRGB)');
+    assert.equal(result.pages[2].header.bitsPerPixel, 24);
+
+    // Pages 4-7: B&W -> 8-bit sGray
+    for (let i = 3; i < 7; i++) {
+      assert.equal(result.pages[i].header.colorSpace, 18, `Page ${i + 1} is B&W (sGray)`);
+      assert.equal(result.pages[i].header.bitsPerPixel, 8);
+      assert.equal(result.pages[i].header.bytesPerLine, 2480);
+    }
+  });
+
+  test('Mixed order with LIFO: reversed order preserves per-page color headers', async () => {
+    // 7-page document with color on page 2 only.
+    // LIFO prints 7 -> 6 -> 5 -> 4 -> 3 -> 2 -> 1
+    const result = await fakePrint({
+      orderId: ORDER_ID, pageCount: 7, pageWidthPt: 595.28, pageHeightPt: 841.89,
+      dpi: 300, isColor: true, colorMode: 'mixed', colorPages: [2], isDuplex: false,
+      pageSizeName: 'iso_a4_210x297mm', reverseOrder: true, scaling: 'fit',
+    });
+    assert.equal(result.pages.length, 7);
+    // 6th page printed is Page 2 (originalPageIndex 1)
+    const page2 = result.pages.find(p => p.originalPageIndex === 1);
+    assert.ok(page2);
+    assert.equal(page2!.header.colorSpace, 19, 'Page 2 is color even in LIFO sequence');
+    assert.equal(page2!.header.bitsPerPixel, 24);
+
+    // All other pages must be sGray
+    for (const p of result.pages) {
+      if (p.originalPageIndex !== 1) {
+        assert.equal(p.header.colorSpace, 18, `Page index ${p.originalPageIndex} should be sGray`);
+        assert.equal(p.header.bitsPerPixel, 8);
+      }
     }
   });
 

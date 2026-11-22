@@ -75,21 +75,23 @@ object PwgRasterEncoder {
     // cupsBitsPerColor at offset 384: 8
     buf.putInt(384, 8)
 
-    // cupsBitsPerPixel at offset 388: Universal 24-bit sRGB is mandatory across all IPP Everywhere printers
-    // (Monochrome jobs encode as grayscale R=G=B in sRGB to avoid firmware crashes on consumer ink-tanks like Epson L3250)
-    buf.putInt(388, 24)
+    // cupsBitsPerPixel at offset 388: 24 for sRGB, 8 for sGray
+    val bitsPerPixel = if (isColor) 24 else 8
+    buf.putInt(388, bitsPerPixel)
 
-    // cupsBytesPerLine at offset 392: widthPixels * 3
-    buf.putInt(392, widthPixels * 3)
+    // cupsBytesPerLine at offset 392: widthPixels * bitsPerPixel / 8
+    val bytesPerLine = widthPixels * (if (isColor) 3 else 1)
+    buf.putInt(392, bytesPerLine)
 
     // cupsColorOrder at offset 396: 0 (CUPS_ORDER_CHUNKED)
     buf.putInt(396, 0)
 
-    // cupsColorSpace at offset 400: 19 (CUPS_CSPACE_SRGB)
-    buf.putInt(400, 19)
+    // cupsColorSpace at offset 400: 19 (CUPS_CSPACE_SRGB) or 18 (CUPS_CSPACE_SW / sGray)
+    val colorSpace = if (isColor) 19 else 18
+    buf.putInt(400, colorSpace)
 
-    // cupsNumColors at offset 420: 3 for sRGB
-    buf.putInt(420, 3)
+    // cupsNumColors at offset 420: 3 for sRGB, 1 for sGray
+    buf.putInt(420, if (isColor) 3 else 1)
 
     // cupsPageSize[2] float at offset 428
     buf.putFloat(428, pageWidthPoints.toFloat())
@@ -138,7 +140,8 @@ object PwgRasterEncoder {
     outputStream: OutputStream,
     pageNumbers: List<Int>? = null, // 1-based, null means all pages
     dpi: Int = 300,
-    isColor: Boolean = true,
+    jobColor: String = "color", // "bw", "color", "mixed"
+    colorPages: List<Int>? = null, // 1-based document page numbers that are in color
     isDuplex: Boolean = false,
     pageSizeName: String = "iso_a4_210x297mm",
     reverseOrder: Boolean = true,
@@ -193,6 +196,9 @@ object PwgRasterEncoder {
         targetPages
       }
 
+      // In-colour page lookup for mixed jobs (1-based page numbers from source document)
+      val inColor = colorPages?.filter { it >= 1 }?.toSet()
+
       // Standard ISO A4 (210x297mm = 595.28x841.89pt) and A3 (297x420mm = 841.89x1190.55pt)
       val isA3 = pageSizeName.contains("a3", ignoreCase = true)
       val mediaWidthPt = if (isA3) 841.8898f else 595.2756f
@@ -205,6 +211,7 @@ object PwgRasterEncoder {
 
       // 2. Encode each page onto the physical media canvas
       for (pageIdx in orderedPages) {
+        val docPageNumber = pageIdx + 1
         val page = renderer.openPage(pageIdx)
         val docWidthPt = page.width.toFloat()
         val docHeightPt = page.height.toFloat()
@@ -282,20 +289,42 @@ object PwgRasterEncoder {
         page.render(bitmap, null, matrix, PdfRenderer.Page.RENDER_MODE_FOR_PRINT)
         page.close()
 
+        // Per-Page Color Determination:
+        // - "bw" job: always 8-bit sGray (fires all 180 black nozzles at ~16 scrolls)
+        // - "color" job: always 24-bit sRGB (fires color nozzles at ~34 scrolls)
+        // - "mixed" job: checks inColor page set (or auto-scans bitmap if inColor is null).
+        //   In duplex, both sides of a physical sheet share color mode if either has color.
+        val pageIsColor = when (jobColor.lowercase()) {
+          "bw" -> false
+          "color" -> true
+          else -> {
+            if (inColor != null) {
+              if (isDuplex) {
+                val sheetStart = if (docPageNumber % 2 == 1) docPageNumber else docPageNumber - 1
+                (sheetStart in inColor) || ((sheetStart + 1) in inColor)
+              } else {
+                docPageNumber in inColor
+              }
+            } else {
+              hasColorPixels(bitmap)
+            }
+          }
+        }
+
         val header = createPageHeader(
           widthPixels = mediaWidthPx,
           heightPixels = mediaHeightPx,
           pageWidthPoints = Math.round(mediaWidthPt),
           pageHeightPoints = Math.round(mediaHeightPt),
           dpi = dpi,
-          isColor = isColor,
+          isColor = pageIsColor,
           isDuplex = isDuplex,
           pageSizeName = pageSizeName,
           totalPages = targetPages.size
         )
         outputStream.write(header)
 
-        encodeBitmapScanlines(bitmap, isColor, outputStream)
+        encodeBitmapScanlines(bitmap, pageIsColor, outputStream)
 
         bitmap.recycle()
       }
@@ -426,12 +455,33 @@ object PwgRasterEncoder {
       out.write(g)
       out.write(b)
     } else {
-      // 24-bit monochrome (sRGB with R=G=B)
+      // 8-bit native monochrome (sGray) - 1 byte per pixel!
+      // Fires all 180 black nozzles on Epson inkjets (~16 scrolls instead of 34)
       val gray = (299 * r + 587 * g + 114 * b + 500) / 1000
       out.write(gray)
-      out.write(gray)
-      out.write(gray)
     }
+  }
+
+  /**
+   * Fast detection of color pixels in a rendered bitmap.
+   * Checks every 4th scanline for non-grayscale pixels (|R-G| > 6 or |R-B| > 6).
+   */
+  fun hasColorPixels(bitmap: Bitmap): Boolean {
+    val width = bitmap.width
+    val height = bitmap.height
+    val row = IntArray(width)
+    for (y in 0 until height step 4) {
+      bitmap.getPixels(row, 0, width, 0, y, width, 1)
+      for (pixel in row) {
+        val r = (pixel shr 16) and 0xFF
+        val g = (pixel shr 8) and 0xFF
+        val b = pixel and 0xFF
+        if (Math.abs(r - g) > 6 || Math.abs(r - b) > 6 || Math.abs(g - b) > 6) {
+          return true
+        }
+      }
+    }
+    return false
   }
 
   private inline fun isPixelEqual(p1: Int, p2: Int, isColor: Boolean): Boolean {

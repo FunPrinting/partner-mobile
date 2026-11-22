@@ -188,6 +188,7 @@ object IppClient {
     val scaling = (options["scaling"] as? String) ?: "fit"
 
     val pages = (options["pages"] as? List<*>)?.mapNotNull { (it as? Number)?.toInt() }
+    val colorPages = (options["colorPages"] as? List<*>)?.mapNotNull { (it as? Number)?.toInt() }
 
     fun streamJob(url: String): Map<String, Any?> {
       val conn = openConnection(url, timeoutMs = 30000)
@@ -220,7 +221,8 @@ object IppClient {
           outputStream = conn.outputStream,
           pageNumbers = pages,
           dpi = dpi,
-          isColor = (color != "bw"),
+          jobColor = color,
+          colorPages = colorPages,
           isDuplex = (sided == "double"),
           pageSizeName = if (pageSize == "A3") "iso_a3_297x420mm" else "iso_a4_210x297mm",
           reverseOrder = reverseOrder,
@@ -409,7 +411,11 @@ object IppClient {
     val sidesKeyword = if (sided == "double") "two-sided-long-edge" else "one-sided"
     writeAttr(bb, 0x44, "sides", sidesKeyword)
 
-    val colorKeyword = if (color == "bw") "monochrome" else "color"
+    val colorKeyword = when (color.lowercase()) {
+      "bw" -> "monochrome"
+      "mixed" -> "auto"
+      else -> "color"
+    }
     writeAttr(bb, 0x44, "print-color-mode", colorKeyword)
 
     val mediaKeyword = if (pageSize == "A3") "iso_a3_297x420mm" else "iso_a4_210x297mm"

@@ -27,6 +27,8 @@ export type PrintRasterOptions = {
   copies?: number;
   sided?: 'single' | 'double';
   color?: 'bw' | 'color' | 'mixed';
+  /** 1-based page numbers that contain color. If omitted for mixed jobs, pages are scanned for color. */
+  colorPages?: number[];
   pageSize?: 'A4' | 'A3';
   jobName?: string;
   pages?: number[];

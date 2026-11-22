@@ -235,6 +235,7 @@ export async function printFile(printer: PrinterEntry, file: File, opts: JobFile
         copies: opts.copies || 1,
         sided: opts.sided,
         color: opts.color,
+        colorPages: opts.colorPages,
         pageSize: opts.pageSize,
         dpi: (printer as IppPrinter).dpi || 300,
         jobName,
