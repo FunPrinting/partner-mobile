@@ -15,7 +15,7 @@
 import { fetch as expoFetch } from 'expo/fetch';
 import { Directory, File, Paths } from 'expo-file-system';
 import * as Print from 'expo-print';
-import { isAvailable, probePrinter, sendIpp, printRaster } from '../../modules/printer-discovery';
+import { isAvailable, probePrinter, sendIpp, printRaster, getJobStatus } from '../../modules/printer-discovery';
 import * as ipp from './ipp';
 import type { JobFile } from './jobLogic';
 import type { IppPrinter, PrinterEntry } from './printerModel';
@@ -174,6 +174,28 @@ async function waitForIppJob(urls: { ipp: string; http: string }, jobId: number,
   const deadline = Date.now() + JOB_WAIT_MS;
   while (Date.now() < deadline) {
     await new Promise((r) => setTimeout(r, 3000));
+
+    // Prefer native status check with TLS / self-signed certificate trust
+    if (isAvailable) {
+      try {
+        const nativeStatus = await getJobStatus(urls.http, jobId);
+        if (nativeStatus && nativeStatus.state > 0) {
+          if (nativeStatus.state === 9) return; // completed
+          if (nativeStatus.state === 7 || nativeStatus.state === 8) {
+            const reasons = nativeStatus.stateReasons.join(', ');
+            throw new Error(`Printer ${nativeStatus.state === 7 ? 'cancelled' : 'stopped'} the job${reasons ? ` (${reasons})` : ''}`);
+          }
+          if (nativeStatus.state === 6) onStatus('Printer needs attention (paper, ink or a jam?)');
+          else onStatus('Printing…');
+          continue;
+        }
+      } catch (nativeErr) {
+        if (nativeErr instanceof Error && /cancelled|stopped/.test(nativeErr.message)) throw nativeErr;
+        // Wi-Fi or query hiccup: continue waiting
+        continue;
+      }
+    }
+
     let res;
     try {
       res = await ippCall(urls.http, ipp.jobAttributesRequest(urls.ipp, jobId), 10_000);
@@ -201,6 +223,27 @@ export async function printFile(printer: PrinterEntry, file: File, opts: JobFile
   if (printer.kind === 'ipp') {
     const urls = ipp.printerUrls(printer.address);
     const caps = { formats: printer.formats, sides: printer.sides, colorModes: printer.colorModes, media: printer.media };
+    const isRasterPrinter = !caps.formats.includes('application/pdf') && caps.formats.includes('image/pwg-raster');
+
+    if (isRasterPrinter && isAvailable) {
+      // Option A: In-App Direct Host (Native PWG Raster Engine)
+      // Send the entire file in one cohesive print job so all pages (color, mixed, or B&W)
+      // print continuously in order, without splitting into disjoint jobs that cause connection resets
+      onStatus('Sending to printer…');
+      const rasterRes = await printRaster(urls.http, file.uri, {
+        copies: opts.copies || 1,
+        sided: opts.sided,
+        color: opts.color,
+        pageSize: opts.pageSize,
+        dpi: (printer as IppPrinter).dpi || 300,
+        jobName,
+      });
+      if (rasterRes.jobId) {
+        await waitForIppJob(urls, rasterRes.jobId, onStatus);
+      }
+      return;
+    }
+
     const { extractPages, pageCount } = await import('./pdfPages'); // loaded when first needed, not at start-up
     const bytes = await file.bytes();
     let pages = Math.max(1, opts.pages || 1);
@@ -210,44 +253,27 @@ export async function printFile(printer: PrinterEntry, file: File, opts: JobFile
       // keep the server's page count; the file is sent whole below
     }
     const runs = planRuns({ pageCount: pages, colour: opts.color ?? 'bw', colorPages: opts.colorPages, duplex: opts.sided === 'double', copies: opts.copies ?? 1 });
-    const isRasterPrinter = !caps.formats.includes('application/pdf') && caps.formats.includes('image/pwg-raster');
 
     for (let i = 0; i < runs.length; i++) {
       const run = runs[i];
       const part = runs.length > 1 ? `part ${i + 1} of ${runs.length} (${run.colour === 'color' ? 'colour' : 'B&W'})` : '';
       onStatus(part ? `Sending ${part}…` : 'Sending to printer…');
 
-      if (isRasterPrinter && isAvailable) {
-        // Option A: In-App Direct Host (Native PWG Raster Engine)
-        const rasterRes = await printRaster(urls.http, file.uri, {
-          copies: run.copies,
-          sided: opts.sided,
-          color: run.colour,
-          pageSize: opts.pageSize,
-          dpi: (printer as IppPrinter).dpi || 300,
+      const data = isWholeFile(run, pages) ? bytes : await extractPages(bytes, run.pages);
+      const res = await ippCall(
+        urls.http,
+        ipp.printJobRequest({
+          printerUri: urls.ipp,
           jobName: runs.length > 1 ? `${jobName} (${i + 1}/${runs.length})` : jobName,
-          pages: isWholeFile(run, pages) ? undefined : run.pages,
-        });
-        if (rasterRes.jobId) {
-          await waitForIppJob(urls, rasterRes.jobId, (s) => onStatus(part ? `${s} ${part}` : s));
-        }
-      } else {
-        const data = isWholeFile(run, pages) ? bytes : await extractPages(bytes, run.pages);
-        const res = await ippCall(
-          urls.http,
-          ipp.printJobRequest({
-            printerUri: urls.ipp,
-            jobName: runs.length > 1 ? `${jobName} (${i + 1}/${runs.length})` : jobName,
-            format: 'application/pdf',
-            jobAttrs: ipp.jobAttributes({ copies: run.copies, sided: opts.sided, color: run.colour, pageSize: opts.pageSize }, caps),
-            data: data as Uint8Array<ArrayBuffer>,
-          }),
-          120_000
-        );
-        if (!ipp.isSuccess(res.statusCode)) throw new Error(`Printer refused the job: ${ipp.statusText(res.statusCode)}`);
-        const printerJobId = Number(res.groups.job?.['job-id']?.[0] ?? 0);
-        if (printerJobId) await waitForIppJob(urls, printerJobId, (s) => onStatus(part ? `${s} ${part}` : s));
-      }
+          format: 'application/pdf',
+          jobAttrs: ipp.jobAttributes({ copies: run.copies, sided: opts.sided, color: run.colour, pageSize: opts.pageSize }, caps),
+          data: data as Uint8Array<ArrayBuffer>,
+        }),
+        120_000
+      );
+      if (!ipp.isSuccess(res.statusCode)) throw new Error(`Printer refused the job: ${ipp.statusText(res.statusCode)}`);
+      const printerJobId = Number(res.groups.job?.['job-id']?.[0] ?? 0);
+      if (printerJobId) await waitForIppJob(urls, printerJobId, (s) => onStatus(part ? `${s} ${part}` : s));
     }
     return;
   }

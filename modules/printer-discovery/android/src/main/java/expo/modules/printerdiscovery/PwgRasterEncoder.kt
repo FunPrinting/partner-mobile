@@ -75,22 +75,21 @@ object PwgRasterEncoder {
     // cupsBitsPerColor at offset 384: 8
     buf.putInt(384, 8)
 
-    // cupsBitsPerPixel at offset 388: 24 for sRGB, 8 for sGray
-    val bitsPerPixel = if (isColor) 24 else 8
-    buf.putInt(388, bitsPerPixel)
+    // cupsBitsPerPixel at offset 388: Universal 24-bit sRGB is mandatory across all IPP Everywhere printers
+    // (Monochrome jobs encode as grayscale R=G=B in sRGB to avoid firmware crashes on consumer ink-tanks like Epson L3250)
+    buf.putInt(388, 24)
 
-    // cupsBytesPerLine at offset 392
-    buf.putInt(392, widthPixels * bitsPerPixel / 8)
+    // cupsBytesPerLine at offset 392: widthPixels * 3
+    buf.putInt(392, widthPixels * 3)
 
     // cupsColorOrder at offset 396: 0 (CUPS_ORDER_CHUNKED)
     buf.putInt(396, 0)
 
-    // cupsColorSpace at offset 400: 19 (CUPS_CSPACE_SRGB) or 18 (CUPS_CSPACE_SW)
-    val colorSpace = if (isColor) 19 else 18
-    buf.putInt(400, colorSpace)
+    // cupsColorSpace at offset 400: 19 (CUPS_CSPACE_SRGB)
+    buf.putInt(400, 19)
 
-    // cupsNumColors at offset 420: 3 for sRGB, 1 for sGray
-    buf.putInt(420, if (isColor) 3 else 1)
+    // cupsNumColors at offset 420: 3 for sRGB
+    buf.putInt(420, 3)
 
     // cupsPageSize[2] float at offset 428
     buf.putFloat(428, pageWidthPoints.toFloat())
@@ -276,43 +275,49 @@ object PwgRasterEncoder {
     return true
   }
 
+  /**
+   * Encodes scanline using the standard CUPS/PWG PackBits compression.
+   * Matches lines 1823-1873 of CUPS raster-stream.c.
+   */
   private fun encodePackBits(
     pixels: IntArray,
     isColor: Boolean,
     out: FastLineBuffer
   ) {
     val width = pixels.size
-    var i = 0
-    while (i < width) {
-      var run = 1
-      val p0 = pixels[i]
-      while (i + run < width && run < 128 && isPixelEqual(pixels[i + run], p0, isColor)) {
-        run++
-      }
+    var ptr = 0
 
-      if (run >= 2) {
-        out.write((run - 1) and 0xFF)
+    while (ptr < width) {
+      val start = ptr
+      val p0 = pixels[ptr]
+      ptr++
+
+      if (ptr >= width) {
+        // Single pixel at the end of scanline
+        out.write(0)
         writePixel(p0, isColor, out)
-        i += run
-      } else {
-        var litEnd = i
-        while (litEnd < width && (litEnd - i) < 128) {
-          if (litEnd + 1 < width && isPixelEqual(pixels[litEnd], pixels[litEnd + 1], isColor)) {
-            break
-          }
-          litEnd++
+      } else if (isPixelEqual(p0, pixels[ptr], isColor)) {
+        // Sequence of repeating pixels (2 to 128)
+        var count = 2
+        ptr++
+        while (count < 128 && ptr < width) {
+          if (!isPixelEqual(pixels[ptr - 1], pixels[ptr], isColor)) break
+          count++
+          ptr++
         }
-        val litLen = litEnd - i
-        if (litLen == 1) {
-          out.write(0)
-          writePixel(pixels[i], isColor, out)
-          i++
-        } else if (litLen >= 2) {
-          out.write((257 - litLen) and 0xFF)
-          for (k in i until litEnd) {
-            writePixel(pixels[k], isColor, out)
-          }
-          i = litEnd
+        out.write((count - 1) and 0xFF)
+        writePixel(p0, isColor, out)
+      } else {
+        // Sequence of non-repeating (literal) pixels (1 to 128)
+        var count = 1
+        while (count < 128 && ptr < width) {
+          if (ptr + 1 < width && isPixelEqual(pixels[ptr], pixels[ptr + 1], isColor)) break
+          count++
+          ptr++
+        }
+        out.write((257 - count) and 0xFF)
+        for (k in start until (start + count)) {
+          writePixel(pixels[k], isColor, out)
         }
       }
     }
@@ -327,7 +332,10 @@ object PwgRasterEncoder {
       out.write(g)
       out.write(b)
     } else {
+      // 24-bit monochrome (sRGB with R=G=B)
       val gray = (299 * r + 587 * g + 114 * b + 500) / 1000
+      out.write(gray)
+      out.write(gray)
       out.write(gray)
     }
   }

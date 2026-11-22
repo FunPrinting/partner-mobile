@@ -179,6 +179,11 @@ object IppClient {
       targetUrl = "https://" + targetUrl.substring(7)
     }
 
+    // Modern Wi-Fi printers on port 631 (such as Epson L3250) enforce IPPS / TLS
+    if (targetUrl.contains(":631") && targetUrl.startsWith("http://", ignoreCase = true)) {
+      targetUrl = "https://" + targetUrl.substring(7)
+    }
+
     val copies = ((options["copies"] as? Number)?.toInt() ?: 1).coerceIn(1, 99)
     val color = (options["color"] as? String) ?: "color"
     val sided = (options["sided"] as? String) ?: "single"
@@ -252,6 +257,14 @@ object IppClient {
           "statusCode" to parsed.statusCode,
           "message" to "Job sent successfully"
         )
+      } catch (e: Exception) {
+        if (url.startsWith("http://", ignoreCase = true)) {
+          // If plain HTTP was reset by printer or failed, retry automatically via TLS/HTTPS
+          conn.disconnect()
+          val httpsUrl = "https://" + url.substring(7)
+          return streamJob(httpsUrl)
+        }
+        throw e
       } finally {
         conn.disconnect()
       }
