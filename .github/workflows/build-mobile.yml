@@ -6,9 +6,15 @@ on:
     branches:
       - main
 
+# A newer push replaces a release build that is still running
+concurrency:
+  group: build-mobile-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 40
     permissions:
       contents: write
 
@@ -21,7 +27,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Java
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
           java-version: '17'
@@ -30,6 +36,11 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
+
+      # Gradle downloads and compiled native libraries are kept between builds
+      - name: Setup Gradle (cached)
+        uses: gradle/actions/setup-gradle@v4
 
       - name: Install Dependencies
         run: npm ci || npm install
@@ -43,9 +54,11 @@ jobs:
       - name: Prebuild Expo Android
         run: npx expo prebuild -p android --clean
 
+      # Phones only: 64-bit and 32-bit ARM. Leaving out the x86 emulator builds halves the
+      # native compile time; no shop phone runs x86.
       - name: Build Android APK
         working-directory: ./android
-        run: ./gradlew assembleRelease
+        run: ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a,armeabi-v7a --build-cache --parallel
 
       - name: Rename APK
         working-directory: ./android/app/build/outputs/apk/release
