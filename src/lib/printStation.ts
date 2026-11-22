@@ -187,7 +187,7 @@ async function printCurrent() {
         lastError = err instanceof Error ? err.message : String(err);
         failedOn.push(printer.id);
         // The printer may have a new IP address (router restart): look for it by its own id and retry
-        if (printer.kind === 'ipp' && /not reachable/i.test(lastError)) {
+        if (printer.kind === 'ipp' && /not reachable|failed to connect|connection refused|timed out|timeout|no route|unreachable|econnrefused|ehostunreach|enetunreach|connection reset/i.test(lastError)) {
           const moved = await refindPrinter(printer).catch(() => null);
           if (moved) {
             setStatus('Found the printer at a new address');

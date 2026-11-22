@@ -17,8 +17,38 @@ function StatusCard() {
   const { connected } = useStore(connectionStore);
   const settings = useStore(settingsStore);
   const station = useStore(stationStore);
-  const { lastSyncAt } = useStore(jobsStore);
+  const { loaded, lastSyncAt } = useStore(jobsStore);
   const isStation = settings.mode === 'station';
+  const hasPrinter = settings.printers.some((p) => p.enabled);
+
+  let badgeLabel = 'Offline';
+  let badgeTone: 'success' | 'warning' | 'neutral' | 'primary' = 'neutral';
+
+  if (isStation) {
+    if (!hasPrinter) {
+      badgeLabel = 'No printer';
+      badgeTone = 'neutral';
+    } else if (station.current) {
+      badgeLabel = 'Printing';
+      badgeTone = 'primary';
+    } else if (station.cooldownUntil && station.cooldownUntil > Date.now()) {
+      badgeLabel = 'Paused';
+      badgeTone = 'warning';
+    } else if (connected) {
+      badgeLabel = 'Live';
+      badgeTone = 'success';
+    } else if (loaded) {
+      badgeLabel = 'Ready';
+      badgeTone = 'success';
+    } else {
+      badgeLabel = 'Offline';
+      badgeTone = 'neutral';
+    }
+  } else {
+    badgeLabel = connected ? 'Live' : loaded ? 'Ready' : 'Offline';
+    badgeTone = connected || loaded ? 'success' : 'neutral';
+  }
+
   return (
     <Card>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -26,13 +56,13 @@ function StatusCard() {
           <Text style={[type.headline, { color: colors.text }]}>{isStation ? 'Print station' : 'Companion'}</Text>
           <Body tone="tertiary">
             {isStation
-              ? settings.printers.some((p) => p.enabled)
+              ? hasPrinter
                 ? `Prints on ${settings.printers.filter((p) => p.enabled).map((p) => (p.kind === 'dialog' ? 'any printer (you confirm each file)' : p.name)).join(' and ')} while this app is open`
                 : 'Switch on a printer in Settings to start'
               : 'Orders print on your shop computer'}
           </Body>
         </View>
-        <Pill label={connected ? 'Live' : 'Offline'} tone={connected ? 'success' : 'neutral'} />
+        <Pill label={badgeLabel} tone={badgeTone} />
       </View>
       {station.current ? (
         <View style={{ gap: space.xs }}>
