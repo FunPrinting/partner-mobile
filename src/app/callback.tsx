@@ -1,30 +1,19 @@
-import { useEffect } from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import { Redirect } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
-import { useTheme } from '@/theme';
+import { sessionStore } from '@/lib/session';
+import { useStore } from '@/lib/store';
 
 /**
- * OAuth callback route — funprintingpartner://callback?code=...&state=...
+ * OAuth callback route: funprintingpartner://callback?code=...&state=...
  *
- * expo-web-browser's openAuthSessionAsync() intercepts this deep link and
- * returns the URL to the signIn() caller before this screen fully mounts.
- * This screen only shows momentarily if the deep link fires without an active
- * openAuthSessionAsync session (e.g. the user opens a stale link manually).
- * Calling maybeCompleteAuthSession() here covers that edge case.
+ * During sign-in, expo-web-browser's openAuthSessionAsync() receives this link and hands the
+ * result to signIn(). This screen is only rendered when the link opens the app on its own
+ * (an old link, or the app was restarted mid sign-in): it finishes any pending auth session
+ * and moves straight on, so it can never leave the user on a blank or spinning screen.
  */
 WebBrowser.maybeCompleteAuthSession();
 
 export default function CallbackScreen() {
-  const { colors } = useTheme();
-
-  useEffect(() => {
-    // maybeCompleteAuthSession is called at module level above.
-    // Nothing else to do — the sign-in screen handles the result.
-  }, []);
-
-  return (
-    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.background }}>
-      <ActivityIndicator color={colors.primary} />
-    </View>
-  );
+  const { status } = useStore(sessionStore);
+  return <Redirect href={status === 'signed-in' ? '/' : '/sign-in'} />;
 }

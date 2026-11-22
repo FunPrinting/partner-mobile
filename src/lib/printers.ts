@@ -17,7 +17,6 @@ import { Directory, File, Paths } from 'expo-file-system';
 import * as Print from 'expo-print';
 import * as ipp from './ipp';
 import type { JobFile } from './jobLogic';
-import { extractPages, pageCount } from './pdfPages';
 import type { PrinterEntry } from './printerModel';
 import { isWholeFile, planRuns } from './runs';
 
@@ -104,6 +103,7 @@ export async function printFile(printer: PrinterEntry, file: File, opts: JobFile
   if (printer.kind === 'ipp') {
     const urls = ipp.printerUrls(printer.address);
     const caps = { formats: printer.formats, sides: printer.sides, colorModes: printer.colorModes, media: printer.media };
+    const { extractPages, pageCount } = await import('./pdfPages'); // loaded when first needed, not at start-up
     const bytes = await file.bytes();
     let pages = Math.max(1, opts.pages || 1);
     try {

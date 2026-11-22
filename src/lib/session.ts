@@ -102,6 +102,16 @@ async function endSession(reason: string) {
 // ── Startup ─────────────────────────────────────────────────────────────
 
 export async function restore() {
+  try {
+    await restoreSaved();
+  } catch {
+    // A keychain that can't be read must not leave the app on a blank screen
+    tokens = null;
+    sessionStore.set({ status: 'signed-out', message: 'Please sign in again.' });
+  }
+}
+
+async function restoreSaved() {
   // Tokens from the earlier app version are not used any more
   await Promise.all(LEGACY_KEYS.map((k) => SecureStore.deleteItemAsync(k).catch(() => undefined)));
   const saved = await loadSaved();

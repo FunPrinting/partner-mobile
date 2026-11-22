@@ -14,15 +14,19 @@ export default function RootLayout() {
   return (
     <>
       <StatusBar style="auto" />
+      {/*
+        Order matters: a signed-out user is sent to the FIRST screen they may see. sign-in must
+        come before callback, or the app opens on the callback screen (a spinner) and stays there.
+      */}
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }}>
-        {/* OAuth callback — must be accessible regardless of sign-in state */}
-        <Stack.Screen name="callback" options={{ animation: 'none' }} />
         <Stack.Protected guard={signedIn}>
           <Stack.Screen name="(tabs)" />
         </Stack.Protected>
         <Stack.Protected guard={!signedIn}>
           <Stack.Screen name="sign-in" />
         </Stack.Protected>
+        {/* OAuth callback (funprintingpartner://callback): reachable either way, then moves on */}
+        <Stack.Screen name="callback" options={{ animation: 'none' }} />
       </Stack>
     </>
   );
