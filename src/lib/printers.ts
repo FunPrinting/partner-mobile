@@ -35,6 +35,10 @@ async function ippCall(httpUrl: string, body: Uint8Array<ArrayBuffer>, timeoutMs
   } catch {
     throw new Error('Printer not reachable. Check it is on and on the same Wi-Fi as this phone.');
   }
+  if (res.status === 426) {
+    // The printer only accepts encrypted IPP with its own certificate, which a phone app cannot verify
+    throw new Error('This printer only accepts secure connections from computers. Print its orders from the desktop app.');
+  }
   if (!res.ok) throw new Error(`Printer answered HTTP ${res.status}`);
   return ipp.decodeResponse(await res.bytes());
 }
