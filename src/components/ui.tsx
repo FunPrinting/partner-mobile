@@ -8,6 +8,7 @@ import { SymbolView, type SymbolViewProps } from 'expo-symbols';
 import React from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Platform,
   Pressable,
   RefreshControl,
@@ -300,6 +301,56 @@ export function Body({ children, tone = 'secondary' }: { children: React.ReactNo
   const { colors } = useTheme();
   const color = tone === 'primary' ? colors.text : tone === 'tertiary' ? colors.textTertiary : colors.textSecondary;
   return <Text style={[type.subhead, { color }]}>{children}</Text>;
+}
+
+/** A tappable row that shows the current value and opens a native picker (ActionSheet on iOS, Alert on Android). */
+export function PickerRow<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
+  subtitle,
+}: {
+  label: string;
+  value: T;
+  options: { val: T; label: string; subtitle?: string }[];
+  onChange: (val: T) => void;
+  subtitle?: string;
+}) {
+  const { colors } = useTheme();
+  const current = options.find((o) => o.val === value);
+  const open = () => {
+    Haptics.selectionAsync().catch(() => undefined);
+    if (Platform.OS === 'ios') {
+      const { ActionSheetIOS } = require('react-native');
+      const labels = options.map((o) => o.val === value ? `${o.label} ✓` : o.label);
+      labels.push('Cancel');
+      ActionSheetIOS.showActionSheetWithOptions(
+        { title: label, options: labels, cancelButtonIndex: labels.length - 1 },
+        (i: number) => { if (i < options.length) onChange(options[i].val); },
+      );
+    } else {
+      Alert.alert(
+        label,
+        subtitle,
+        [
+          ...options.map((o) => ({
+            text: o.val === value ? `${o.label} ✓` : o.label,
+            onPress: () => onChange(o.val),
+          })),
+          { text: 'Cancel', style: 'cancel' as const },
+        ],
+      );
+    }
+  };
+  return (
+    <Row
+      title={label}
+      subtitle={subtitle}
+      value={current?.label ?? String(value)}
+      onPress={open}
+    />
+  );
 }
 
 const styles = StyleSheet.create({

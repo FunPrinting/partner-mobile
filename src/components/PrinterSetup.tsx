@@ -7,7 +7,7 @@ import { File } from 'expo-file-system';
 import * as Print from 'expo-print';
 import { useState } from 'react';
 import { Alert, Platform, View } from 'react-native';
-import { Banner, Body, Button, Card, Field, Pill, Section, SwitchRow } from '@/components/ui';
+import { Banner, Body, Button, Card, Field, Pill, PickerRow, Section, SwitchRow } from '@/components/ui';
 import type { FoundPrinter } from '@/lib/discovery';
 import { canSearch, findPrinters } from '@/lib/findPrinters';
 import { chooseAirPrintPrinter, checkIppPrinter, printFile } from '@/lib/printers';
@@ -183,45 +183,27 @@ export default function PrinterSetup() {
               </View>
               {p.kind === 'ipp' && (p.formats.includes('image/pwg-raster') || !p.formats.includes('application/pdf')) ? (
                 <View style={{ gap: space.xs, marginTop: 4 }}>
-                  <Body tone="secondary">Print Resolution (DPI)</Body>
-                  <View style={{ flexDirection: 'row', gap: space.xs, flexWrap: 'wrap' }}>
-                    {([
-                      { val: 200, label: '200 Draft' },
-                      { val: 300, label: '300 Normal' },
-                      { val: 600, label: '600 High' },
-                    ] as const).map((opt) => {
-                      const isSelected = (p.dpi || 300) === opt.val;
-                      return (
-                        <Button
-                          key={opt.val}
-                          variant={isSelected ? 'primary' : 'secondary'}
-                          title={isSelected ? `${opt.label} ✓` : opt.label}
-                          onPress={() => changePrinterDpi(p.id, opt.val)}
-                        />
-                      );
-                    })}
-                  </View>
-                  <View style={{ gap: space.xs, marginTop: 4 }}>
-                    <Body tone="secondary">Page Scaling</Body>
-                    <View style={{ flexDirection: 'row', gap: space.xs, flexWrap: 'wrap' }}>
-                      {([
-                        { val: 'fit', label: 'Fit Printable (Safe)' },
-                        { val: 'shrink', label: 'Shrink Oversized' },
-                        { val: 'none', label: '100% Actual Size' },
-                        { val: 'fill', label: 'Fit Paper (Fill)' },
-                      ] as const).map((opt) => {
-                        const isSelected = (p.scaling || 'fit') === opt.val;
-                        return (
-                          <Button
-                            key={opt.val}
-                            variant={isSelected ? 'primary' : 'secondary'}
-                            title={isSelected ? `${opt.label} ✓` : opt.label}
-                            onPress={() => changePrinterScaling(p.id, opt.val)}
-                          />
-                        );
-                      })}
-                    </View>
-                  </View>
+                  <PickerRow
+                    label="Print Resolution (DPI)"
+                    value={String(p.dpi || 300)}
+                    options={[
+                      { val: '200', label: '200 Draft', subtitle: 'Faster, uses less ink' },
+                      { val: '300', label: '300 Normal', subtitle: 'Recommended for documents' },
+                      { val: '600', label: '600 High', subtitle: 'Sharp text and photos, slower' },
+                    ]}
+                    onChange={(v) => changePrinterDpi(p.id, Number(v) as 200 | 300 | 600)}
+                  />
+                  <PickerRow
+                    label="Page Scaling"
+                    value={p.scaling || 'fit'}
+                    options={[
+                      { val: 'fit', label: 'Fit Printable (Safe)', subtitle: 'Fits inside 3mm hardware margins' },
+                      { val: 'shrink', label: 'Shrink Oversized', subtitle: 'Only shrinks if too large, no upscale' },
+                      { val: 'none', label: '100% Actual Size', subtitle: 'Exact 1:1 scale, may clip edges' },
+                      { val: 'fill', label: 'Fit Paper (Fill)', subtitle: 'Covers entire sheet, may crop' },
+                    ]}
+                    onChange={(v) => changePrinterScaling(p.id, v)}
+                  />
                   <SwitchRow
                     title="LIFO stack order (Page N to 1)"
                     subtitle="Prints last page first so Page 1 lands on top of face-up output trays"
