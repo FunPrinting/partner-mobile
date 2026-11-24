@@ -240,8 +240,19 @@ async function printCurrent() {
   if (s.summarySlip !== false && switchedOn().length > 0) {
     try {
       setStatus('Printing order summary…');
+      let orderData: any = (job as any).customerInfo ? job : undefined;
+      if (!orderData && job.orderId) {
+        try {
+          const res = await api('/api/partner/orders/' + encodeURIComponent(job.orderId));
+          if (res.ok && (res.data as any)?.order) {
+            orderData = (res.data as any).order;
+          }
+        } catch {
+          // ignore network failure for order metadata
+        }
+      }
       const summaryPrinter = switchedOn().find((p) => usedPrinters.includes(p.name)) || switchedOn()[0];
-      await printOrderSummary(summaryPrinter, job, setStatus);
+      await printOrderSummary(summaryPrinter, job, orderData, setStatus);
     } catch (summaryErr) {
       reportError(new Error(`Order summary slip failed: ${summaryErr instanceof Error ? summaryErr.message : String(summaryErr)}`), {
         level: 'warning',

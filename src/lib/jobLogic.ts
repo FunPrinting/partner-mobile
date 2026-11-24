@@ -31,6 +31,25 @@ export type Job = {
   leaseUntil?: string;
   lastError?: string;
   createdAt?: string;
+  customerInfo?: {
+    name?: string;
+    phone?: string;
+    email?: string;
+    address?: string;
+  };
+  deliveryOption?: {
+    type?: 'pickup' | 'delivery';
+    partnerDeliveryPoint?: string;
+    recipientName?: string;
+    recipientPhone?: string;
+    phone?: string;
+    address?: string;
+    flatBuilding?: string;
+    city?: string;
+    pinCode?: string;
+  };
+  amount?: number;
+  expectedDate?: string;
 };
 
 export type FileKind = 'pdf' | 'jpeg' | 'png' | 'other';

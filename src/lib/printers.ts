@@ -296,8 +296,15 @@ export async function printFile(printer: PrinterEntry, file: File, opts: JobFile
  * Because face-up trays (like Epson L3250) stack LIFO, printing this last places
  * it right on top of the physical tray for the shop and customer.
  */
-export async function printOrderSummary(printer: PrinterEntry, job: Job, onStatus: (s: string) => void) {
-  const bytes = await renderOrderSummaryPdf(job);
+export async function printOrderSummary(
+  printer: PrinterEntry,
+  job: Job,
+  orderOrStatus?: any,
+  onStatus?: (s: string) => void
+) {
+  const order = typeof orderOrStatus === 'object' && orderOrStatus !== null ? orderOrStatus : undefined;
+  const statusCb = typeof orderOrStatus === 'function' ? orderOrStatus : (onStatus || (() => {}));
+  const bytes = await renderOrderSummaryPdf(job, order);
   if (!downloads.exists) downloads.create({ intermediates: true });
   const summaryFile = new File(downloads, `summary_${job.jobId.replace(/[^A-Za-z0-9_-]/g, '_')}.pdf`);
   summaryFile.write(bytes);
@@ -319,7 +326,7 @@ export async function printOrderSummary(printer: PrinterEntry, job: Job, onStatu
     const isRasterPrinter = !caps.formats.includes('application/pdf') && caps.formats.includes('image/pwg-raster');
 
     if (isRasterPrinter && isAvailable) {
-      onStatus('Printing order summary…');
+      statusCb('Printing order summary…');
       const rasterRes = await printRaster(urls.http, summaryFile.uri, {
         copies: 1,
         sided: 'single',
@@ -331,11 +338,11 @@ export async function printOrderSummary(printer: PrinterEntry, job: Job, onStatu
         scaling: 'fit',
       });
       if (rasterRes.jobId) {
-        await waitForIppJob(urls, rasterRes.jobId, onStatus);
+        await waitForIppJob(urls, rasterRes.jobId, statusCb);
       }
       return;
     }
   }
 
-  await printFile(printer, summaryFile, jobFile, `Summary #${job.deliveryNumber || job.orderId}`, onStatus);
+  await printFile(printer, summaryFile, jobFile, `Summary #${job.deliveryNumber || job.orderId}`, statusCb);
 }
