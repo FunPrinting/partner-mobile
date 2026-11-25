@@ -139,6 +139,7 @@ object PwgRasterEncoder {
     pdfFileOrUri: String,
     outputStream: OutputStream,
     pageNumbers: List<Int>? = null, // 1-based, null means all pages
+    copies: Int = 1,
     dpi: Int = 300,
     jobColor: String = "color", // "bw", "color", "mixed"
     colorPages: List<Int>? = null, // 1-based document page numbers that are in color
@@ -206,11 +207,15 @@ object PwgRasterEncoder {
       val mediaWidthPx = Math.round(mediaWidthPt * dpi / 72f)
       val mediaHeightPx = Math.round(mediaHeightPt * dpi / 72f)
 
+      val numCopies = copies.coerceAtLeast(1)
+      val totalRasterPages = targetPages.size * numCopies
+
       // 1. Write the 4-byte PWG file synchronization word
       outputStream.write(SYNC_WORD)
 
-      // 2. Encode each page onto the physical media canvas
-      for (pageIdx in orderedPages) {
+      // 2. Encode each page onto the physical media canvas, repeating for all copies (collated)
+      for (copy in 1..numCopies) {
+        for (pageIdx in orderedPages) {
         val docPageNumber = pageIdx + 1
         val page = renderer.openPage(pageIdx)
         val docWidthPt = page.width.toFloat()
@@ -320,7 +325,7 @@ object PwgRasterEncoder {
           isColor = pageIsColor,
           isDuplex = isDuplex,
           pageSizeName = pageSizeName,
-          totalPages = targetPages.size
+          totalPages = totalRasterPages
         )
         outputStream.write(header)
 
@@ -328,7 +333,8 @@ object PwgRasterEncoder {
 
         bitmap.recycle()
       }
-    } finally {
+    }
+  } finally {
       renderer.close()
       pfd.close()
     }

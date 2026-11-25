@@ -278,6 +278,7 @@ interface FakePrintJob {
   reverseOrder: boolean;
   scaling: ScalingMode;
   pageNumbers?: number[]; // 1-based subset, or all
+  copies?: number;
 }
 
 interface FakePrintResult {
@@ -313,36 +314,40 @@ async function fakePrint(job: FakePrintJob): Promise<FakePrintResult> {
 
   // Build PWG headers
   const inColor = job.colorPages ? new Set(job.colorPages.filter(p => p >= 1)) : null;
+  const numCopies = Math.max(1, job.copies || 1);
+  const totalRasterPages = targetPages.length * numCopies;
   const pageResults: { originalPageIndex: number; header: PageHeader }[] = [];
-  for (const pageIdx of orderedPages) {
-    const docPageNum = pageIdx + 1;
-    let pageIsColor = job.isColor;
-    if (job.colorMode === 'bw') {
-      pageIsColor = false;
-    } else if (job.colorMode === 'color') {
-      pageIsColor = true;
-    } else if (job.colorMode === 'mixed' && inColor !== null) {
-      if (job.isDuplex) {
-        const sheetStart = docPageNum % 2 === 1 ? docPageNum : docPageNum - 1;
-        pageIsColor = inColor.has(sheetStart) || inColor.has(sheetStart + 1);
-      } else {
-        pageIsColor = inColor.has(docPageNum);
+  for (let c = 0; c < numCopies; c++) {
+    for (const pageIdx of orderedPages) {
+      const docPageNum = pageIdx + 1;
+      let pageIsColor = job.isColor;
+      if (job.colorMode === 'bw') {
+        pageIsColor = false;
+      } else if (job.colorMode === 'color') {
+        pageIsColor = true;
+      } else if (job.colorMode === 'mixed' && inColor !== null) {
+        if (job.isDuplex) {
+          const sheetStart = docPageNum % 2 === 1 ? docPageNum : docPageNum - 1;
+          pageIsColor = inColor.has(sheetStart) || inColor.has(sheetStart + 1);
+        } else {
+          pageIsColor = inColor.has(docPageNum);
+        }
       }
-    }
 
-    const headerBuf = createPageHeader({
-      widthPixels: widthPx,
-      heightPixels: heightPx,
-      pageWidthPoints: Math.round(media.widthPt),
-      pageHeightPoints: Math.round(media.heightPt),
-      dpi: job.dpi,
-      isColor: pageIsColor,
-      isDuplex: job.isDuplex,
-      pageSizeName: job.pageSizeName,
-      totalPages: targetPages.length,
-    });
-    const parsed = parsePageHeader(headerBuf);
-    pageResults.push({ originalPageIndex: pageIdx, header: parsed });
+      const headerBuf = createPageHeader({
+        widthPixels: widthPx,
+        heightPixels: heightPx,
+        pageWidthPoints: Math.round(media.widthPt),
+        pageHeightPoints: Math.round(media.heightPt),
+        dpi: job.dpi,
+        isColor: pageIsColor,
+        isDuplex: job.isDuplex,
+        pageSizeName: job.pageSizeName,
+        totalPages: totalRasterPages,
+      });
+      const parsed = parsePageHeader(headerBuf);
+      pageResults.push({ originalPageIndex: pageIdx, header: parsed });
+    }
   }
 
   return {
@@ -653,6 +658,20 @@ describe(`Fake Printer · Order ${ORDER_ID} · 7-page A4 Mixed Colour document`,
     // Pages 2,5,7 → 0-based: 1,4,6 → reversed: 6,4,1
     assert.deepEqual(order, [6, 4, 1], 'Subset pages reversed in LIFO order');
     assert.equal(result.pages.length, 3);
+  });
+
+  // ─── Multiple copies test ──────────────────────────────────────────
+
+  test('Multiple copies (copies: 2): pages repeat collated in raster stream', async () => {
+    const result = await fakePrint({
+      orderId: 'ORD-COPIES', pageCount: 3, pageWidthPt: 595.28, pageHeightPt: 841.89,
+      dpi: 300, isColor: false, colorMode: 'bw', isDuplex: false, pageSizeName: 'iso_a4_210x297mm',
+      reverseOrder: false, scaling: 'fit', copies: 2,
+    });
+    // 3 pages x 2 copies = 6 total pages
+    assert.equal(result.pages.length, 6);
+    assert.deepEqual(result.pages.map(p => p.originalPageIndex), [0, 1, 2, 0, 1, 2]);
+    assert.equal(result.pages[0].header.totalPages, 6);
   });
 
   // ─── IPP attribute tests ─────────────────────────────────────────────

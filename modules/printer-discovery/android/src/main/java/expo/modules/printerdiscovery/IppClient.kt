@@ -202,12 +202,14 @@ object IppClient {
         }
 
         // 1. Write IPP Print-Job request header & attributes
+        // NOTE: For PWG Raster, copies are collated directly in the raster stream.
+        // We set copies = 1 in the IPP attribute so the printer doesn't multiply the already-repeated stream.
         writePrintJobHeader(
           out = conn.outputStream,
           printerUri = ippUri,
           jobName = jobName,
           format = "image/pwg-raster",
-          copies = copies,
+          copies = 1,
           sided = sided,
           color = color,
           pageSize = pageSize,
@@ -220,6 +222,7 @@ object IppClient {
           pdfFileOrUri = pdfUri,
           outputStream = conn.outputStream,
           pageNumbers = pages,
+          copies = copies,
           dpi = dpi,
           jobColor = color,
           colorPages = colorPages,
