@@ -141,7 +141,7 @@ export async function loadBroadcasts() {
   return api<{
     success?: boolean;
     broadcasts?: BroadcastItem[];
-    deliveryPoints?: Array<{ name: string }>;
+    deliveryPoints?: { name: string }[];
     error?: string;
   }>('/api/partner/broadcasts');
 }

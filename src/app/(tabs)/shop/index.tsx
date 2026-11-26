@@ -914,7 +914,7 @@ export default function ShopScreen() {
               ))
             ) : (
               <Card>
-                <Body tone="tertiary">Default store windows are active. Tap "Add slot" to set custom windows.</Body>
+                <Body tone="tertiary">Default store windows are active. Tap &ldquo;Add slot&rdquo; to set custom windows.</Body>
               </Card>
             )}
           </Section>

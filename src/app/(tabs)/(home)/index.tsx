@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert, Text, View } from 'react-native';
 import { JobCard } from '@/components/JobCard';
 import { Banner, Body, Button, Card, EmptyState, Pill, Screen, Section } from '@/components/ui';
@@ -18,6 +18,13 @@ function StatusCard() {
   const settings = useStore(settingsStore);
   const station = useStore(stationStore);
   const { loaded, lastSyncAt } = useStore(jobsStore);
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!station.cooldownUntil) return;
+    const delay = Math.max(0, station.cooldownUntil - Date.now()) + 50;
+    const t = setTimeout(() => setNow(Date.now()), delay);
+    return () => clearTimeout(t);
+  }, [station.cooldownUntil]);
   const isStation = settings.mode === 'station';
   const hasPrinter = settings.printers.some((p) => p.enabled);
 
@@ -31,7 +38,7 @@ function StatusCard() {
     } else if (station.current) {
       badgeLabel = 'Printing';
       badgeTone = 'primary';
-    } else if (station.cooldownUntil && station.cooldownUntil > Date.now()) {
+    } else if (station.cooldownUntil && station.cooldownUntil > now) {
       badgeLabel = 'Paused';
       badgeTone = 'warning';
     } else if (connected) {

@@ -7,6 +7,7 @@ import * as Haptics from 'expo-haptics';
 import { SymbolView, type SymbolViewProps } from 'expo-symbols';
 import React from 'react';
 import {
+  ActionSheetIOS,
   ActivityIndicator,
   Alert,
   Platform,
@@ -317,12 +318,10 @@ export function PickerRow<T extends string>({
   onChange: (val: T) => void;
   subtitle?: string;
 }) {
-  const { colors } = useTheme();
   const current = options.find((o) => o.val === value);
   const open = () => {
     Haptics.selectionAsync().catch(() => undefined);
     if (Platform.OS === 'ios') {
-      const { ActionSheetIOS } = require('react-native');
       const labels = options.map((o) => o.val === value ? `${o.label} ✓` : o.label);
       labels.push('Cancel');
       ActionSheetIOS.showActionSheetWithOptions(

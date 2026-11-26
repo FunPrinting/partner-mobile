@@ -57,13 +57,14 @@ export default function MessagesScreen() {
   const scrollRef = useRef<ScrollView | null>(null);
 
   // ── Broadcast State ─────────────────────────────────────────────────
-  const [points, setPoints] = useState<Array<{ name: string }>>([]);
+  const [points, setPoints] = useState<{ name: string }[]>([]);
   const [bpPoint, setBpPoint] = useState('');
   const [bpDate, setBpDate] = useState('');
   const [bpMessage, setBpMessage] = useState('');
   const [previewCount, setPreviewCount] = useState<number | null>(null);
   const [sendingBroadcast, setSendingBroadcast] = useState(false);
   const [broadcasts, setBroadcasts] = useState<BroadcastItem[]>([]);
+  const [now, setNow] = useState(() => Date.now());
 
   const loadAll = useCallback(async () => {
     try {
@@ -71,6 +72,7 @@ export default function MessagesScreen() {
         refreshConversations(pointFilter),
         loadBroadcasts().catch(() => null),
       ]);
+      setNow(Date.now());
       setConversations(list);
       setConvError(undefined);
       if (bp?.ok && bp.data.success) {
@@ -92,10 +94,10 @@ export default function MessagesScreen() {
     }, [loadAll])
   );
 
-  const loadThread = useCallback(async (conversationId: string, silent = false) => {
-    if (!silent) setLoadingThread(true);
+  const loadThread = useCallback(async (conversationId: string) => {
     try {
       const res = await fetchThreadMessages(conversationId);
+      setNow(Date.now());
       if (res.ok && res.data.success && Array.isArray(res.data.messages)) {
         setMessages(res.data.messages);
         if (res.data.conversation) {
@@ -105,31 +107,44 @@ export default function MessagesScreen() {
         }
       }
     } finally {
-      if (!silent) setLoadingThread(false);
+      setLoadingThread(false);
     }
   }, []);
 
   useEffect(() => {
     if (!selectedId) return;
-    void loadThread(selectedId);
-    const t = setInterval(() => void loadThread(selectedId, true), 4000);
-    return () => clearInterval(t);
+    let cancelled = false;
+    void fetchThreadMessages(selectedId).then((res) => {
+      if (cancelled) return;
+      setNow(Date.now());
+      setLoadingThread(false);
+      if (res.ok && res.data.success && Array.isArray(res.data.messages)) {
+        setMessages(res.data.messages);
+        if (res.data.conversation) {
+          setConversations((prev) =>
+            prev.map((c) => (c.conversationId === selectedId ? { ...c, ...res.data.conversation! } : c))
+          );
+        }
+      }
+    });
+    const t = setInterval(() => void loadThread(selectedId), 4000);
+    return () => {
+      cancelled = true;
+      clearInterval(t);
+    };
   }, [selectedId, loadThread]);
 
   useEffect(() => {
     return onIncomingChatEvent((payload) => {
       void loadAll();
       if (selectedId && (!payload.conversationId || payload.conversationId === selectedId)) {
-        void loadThread(selectedId, true);
+        void loadThread(selectedId);
       }
     });
   }, [selectedId, loadAll, loadThread]);
 
   useEffect(() => {
-    if (!bpPoint) {
-      setPreviewCount(null);
-      return;
-    }
+    if (!bpPoint) return;
     let stale = false;
     previewBroadcastRecipients(bpPoint, bpDate.trim() || undefined)
       .then((res) => {
@@ -146,9 +161,15 @@ export default function MessagesScreen() {
     [conversations, selectedId]
   );
 
-  const isAiPaused = Boolean(
-    activeConv?.aiPausedUntil && new Date(activeConv.aiPausedUntil).getTime() > Date.now()
-  );
+  const aiPausedUntilMs = activeConv?.aiPausedUntil ? new Date(activeConv.aiPausedUntil).getTime() : 0;
+  useEffect(() => {
+    if (!aiPausedUntilMs) return;
+    const delay = Math.max(0, aiPausedUntilMs - Date.now()) + 50;
+    const t = setTimeout(() => setNow(Date.now()), delay);
+    return () => clearTimeout(t);
+  }, [aiPausedUntilMs]);
+
+  const isAiPaused = Boolean(aiPausedUntilMs && aiPausedUntilMs > now);
 
   const handleSend = async () => {
     const body = draft.trim();
@@ -160,7 +181,7 @@ export default function MessagesScreen() {
         throw new Error(res.data.error || 'Could not send message');
       }
       setDraft('');
-      await loadThread(activeConv.conversationId, true);
+      await loadThread(activeConv.conversationId);
       void loadAll();
     } catch (err) {
       Alert.alert('Could not send', err instanceof Error ? err.message : 'Try again.');
@@ -181,7 +202,7 @@ export default function MessagesScreen() {
         action === 'approve' ? 'COD Approved' : 'COD Declined',
         action === 'approve' ? `Order #${orderId} moved to your print queue.` : `Order #${orderId} was declined.`
       );
-      if (selectedId) await loadThread(selectedId, true);
+      if (selectedId) await loadThread(selectedId);
       await loadAll();
     } catch (err) {
       Alert.alert('Action failed', err instanceof Error ? err.message : 'Check connection.');
@@ -464,7 +485,14 @@ export default function MessagesScreen() {
             />
           ) : (
             conversations.map((c) => (
-              <Pressable key={c.conversationId} onPress={() => setSelectedId(c.conversationId)}>
+              <Pressable
+                key={c.conversationId}
+                onPress={() => {
+                  setLoadingThread(true);
+                  setMessages([]);
+                  setSelectedId(c.conversationId);
+                }}
+              >
                 <Card tone={c.needsHumanAttention ? 'danger' : c.orderSummary?.status === 'pending_cod_approval' ? 'warning' : undefined}>
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: space.xs }}>
                     <Text style={[type.headline, { color: colors.text, flex: 1 }]} numberOfLines={1}>
@@ -531,7 +559,7 @@ export default function MessagesScreen() {
                 />
 
                 <Text style={[type.caption, { color: colors.primary, fontWeight: '600' }]}>
-                  {previewCount === null ? 'Checking active orders…' : `${previewCount} active order(s) will be notified`}
+                  {!bpPoint || previewCount === null ? 'Checking active orders…' : `${previewCount} active order(s) will be notified`}
                 </Text>
 
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.xs }}>

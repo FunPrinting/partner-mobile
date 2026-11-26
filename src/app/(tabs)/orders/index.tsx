@@ -168,7 +168,7 @@ export default function OrdersScreen() {
     if (!next.length && !canNoShow) return;
     if (next.length === 1 && !canNoShow) return move(order, next[0]);
 
-    const actions: Array<{ text: string; style?: 'destructive' | 'cancel'; onPress: () => void }> = next.map((s) => ({
+    const actions: { text: string; style?: 'destructive' | 'cancel'; onPress: () => void }[] = next.map((s) => ({
       text: STATUS_LABEL[s] ?? s,
       onPress: () => void move(order, s),
     }));
