@@ -762,6 +762,11 @@ describe('Order Summary Slip rendering', () => {
     assert.ok(Math.abs(width - 595.28) < 1, `Width should be A4 (got ${width})`);
     assert.ok(Math.abs(height - 841.89) < 1, `Height should be A4 (got ${height})`);
 
+    const codDoc = await PDFDocument.load(
+      await renderOrderSummaryPdf(job, { paymentMethod: 'cod', paymentStatus: 'cod_pending', amount: 45 })
+    );
+    assert.equal(codDoc.getPageCount(), 1, 'COD summary slip is 1 page');
+
     console.log(`  ✓ Summary slip for ${ORDER_ID}: ${pdfBytes.length} bytes, ${width.toFixed(0)}×${height.toFixed(0)} pt`);
   });
 });

@@ -57,6 +57,8 @@ export type Job = {
     };
   };
   amount?: number;
+  paymentMethod?: 'online' | 'cod' | string;
+  paymentStatus?: string;
   expectedDate?: string;
 };
 

@@ -240,7 +240,8 @@ async function printCurrent() {
   if (s.summarySlip !== false && switchedOn().length > 0) {
     try {
       setStatus('Printing order summary…');
-      let orderData: any = (job as any).customerInfo ? job : undefined;
+      let orderData: any =
+        (job as any).customerInfo && (job as any).paymentMethod ? job : undefined;
       if (!orderData && job.orderId) {
         try {
           const res = await api('/api/partner/orders/' + encodeURIComponent(job.orderId));

@@ -3,7 +3,8 @@ import * as Linking from 'expo-linking';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { Alert, Platform, Pressable, Text, View } from 'react-native';
-import { Banner, Body, Button, Card, Field, Icon, Row, Screen, Section, Stat, SwitchRow } from '@/components/ui';
+import { Banner, Body, Button, Card, Field, Icon, PickerRow, Row, Screen, Section, Stat, SwitchRow } from '@/components/ui';
+import { OsmMapModal } from '@/components/OsmMapModal';
 import { api } from '@/lib/session';
 import { space, type, useTheme } from '@/theme';
 
@@ -140,6 +141,7 @@ export default function ShopScreen() {
   const [location, setLocation] = useState<Point>(DEFAULT_POINT);
   const [points, setPoints] = useState<DeliveryPoint[]>([]);
   const [locating, setLocating] = useState(false);
+  const [mapTarget, setMapTarget] = useState<{ kind: 'shop' } | { kind: 'point'; index: number } | null>(null);
 
   // COD, AI Assistant & Pickup Slots
   const [codEnabled, setCodEnabled] = useState(false);
@@ -710,6 +712,11 @@ export default function ShopScreen() {
 
               <View style={{ gap: space.sm, marginTop: space.xs }}>
                 <Button
+                  title="Pick shop location on map"
+                  icon={{ ios: 'mappin.and.ellipse', android: 'place' }}
+                  onPress={() => setMapTarget({ kind: 'shop' })}
+                />
+                <Button
                   variant="secondary"
                   title="Use my current GPS location"
                   icon={{ ios: 'location.fill', android: 'my_location' }}
@@ -736,7 +743,7 @@ export default function ShopScreen() {
 
           <Section
             title="Delivery points"
-            footer="Places where you hand over delivery orders. New points start at the shop's location."
+            footer="Places where you hand over delivery orders. Tap a point's coordinates to place its pin on the map."
             action={<Button variant="plain" title="Add" onPress={() => edit(setPoints)([...points, { name: '', contactNumber: '', location }])} style={{ minHeight: 32, paddingHorizontal: 0 }} />}
           >
             {points.length ? (
@@ -749,7 +756,17 @@ export default function ShopScreen() {
                     <RemoveButton label={`Remove ${d.name || 'delivery point'}`} onPress={() => edit(setPoints)(points.filter((_, j) => j !== i))} />
                   </View>
                   <Field label="Contact number (optional)" keyboardType="phone-pad" value={d.contactNumber} onChangeText={(v) => edit(setPoints)(points.map((x, j) => (j === i ? { ...x, contactNumber: v } : x)))} />
-                  <Row title="Set to the shop's map pin" subtitle={`${d.location.latitude.toFixed(5)}, ${d.location.longitude.toFixed(5)}`} onPress={() => edit(setPoints)(points.map((x, j) => (j === i ? { ...x, location } : x)))} />
+                  <Row
+                    title="Pick location on map"
+                    subtitle={`${d.location.latitude.toFixed(5)}, ${d.location.longitude.toFixed(5)}`}
+                    onPress={() => setMapTarget({ kind: 'point', index: i })}
+                  />
+                  <Button
+                    variant="plain"
+                    title="Set to the shop's map pin"
+                    onPress={() => edit(setPoints)(points.map((x, j) => (j === i ? { ...x, location } : x)))}
+                    style={{ minHeight: 32, justifyContent: 'flex-start', paddingHorizontal: 0 }}
+                  />
                 </Card>
               ))
             ) : (
@@ -855,16 +872,16 @@ export default function ShopScreen() {
                             onPress={() =>
                               edit(setSlots)(
                                 slots.map((x, j) =>
-                                  j === i
-                                    ? {
-                                        ...x,
-                                        target: tgt,
-                                        pickupPointName: tgt === 'pickup_point' ? x.pickupPointName || points[0]?.name || '' : undefined,
-                                      }
-                                    : x
+                                    j === i
+                                      ? {
+                                          ...x,
+                                          target: tgt,
+                                          pickupPointName: tgt === 'pickup_point' ? x.pickupPointName || '*' : undefined,
+                                        }
+                                      : x
+                                  )
                                 )
-                              )
-                            }
+                              }
                             style={{
                               paddingHorizontal: space.md,
                               paddingVertical: 5,
@@ -883,14 +900,27 @@ export default function ShopScreen() {
                     </View>
                     <RemoveButton label="Remove slot" onPress={() => edit(setSlots)(slots.filter((_, j) => j !== i))} />
                   </View>
-                  {s.target === 'pickup_point' ? (
-                    <Field
-                      label="Pickup point name"
-                      placeholder={points[0]?.name || 'Exact pickup point name'}
-                      value={s.pickupPointName || ''}
-                      onChangeText={(v) => edit(setSlots)(slots.map((x, j) => (j === i ? { ...x, pickupPointName: v } : x)))}
-                    />
-                  ) : null}
+                  {s.target === 'pickup_point' ? (() => {
+                    const named = [...new Set(points.map((p) => p.name.trim()).filter(Boolean))];
+                    const currentVal = s.pickupPointName?.trim() || '*';
+                    const options = [
+                      { val: '*', label: 'All pickup points' },
+                      ...named.map((n) => ({ val: n, label: n })),
+                      ...(currentVal !== '*' && !named.includes(currentVal)
+                        ? [{ val: currentVal, label: `${currentVal} (custom)` }]
+                        : []),
+                    ];
+                    return (
+                      <PickerRow
+                        label="Pickup point"
+                        value={currentVal}
+                        options={options}
+                        onChange={(v) =>
+                          edit(setSlots)(slots.map((x, j) => (j === i ? { ...x, pickupPointName: v } : x)))
+                        }
+                      />
+                    );
+                  })() : null}
                   <View style={{ flexDirection: 'row', gap: space.md }}>
                     <View style={{ flex: 1 }}>
                       <Field label="Start (HH:MM)" placeholder="10:00" value={s.startTime} onChangeText={(v) => edit(setSlots)(slots.map((x, j) => (j === i ? { ...x, startTime: v } : x)))} />
@@ -922,6 +952,31 @@ export default function ShopScreen() {
           <Button title={dirty ? 'Save changes' : 'Saved'} onPress={save} loading={saving} disabled={!dirty} />
         </>
       ) : null}
+
+      <OsmMapModal
+        visible={mapTarget !== null}
+        title={
+          mapTarget?.kind === 'point'
+            ? points[mapTarget.index]?.name.trim() || `Pickup point #${mapTarget.index + 1}`
+            : profile?.businessName || 'Shop location'
+        }
+        initialPoint={
+          mapTarget?.kind === 'point'
+            ? (points[mapTarget.index]?.location ?? location)
+            : location
+        }
+        shopPin={mapTarget?.kind === 'point' ? location : undefined}
+        onConfirm={(pin) => {
+          if (mapTarget?.kind === 'point') {
+            const idx = mapTarget.index;
+            edit(setPoints)(points.map((x, j) => (j === idx ? { ...x, location: pin } : x)));
+          } else {
+            edit(setLocation)(pin);
+          }
+          setMapTarget(null);
+        }}
+        onClose={() => setMapTarget(null)}
+      />
     </Screen>
   );
 }

@@ -283,8 +283,10 @@ export default function OrdersScreen() {
                 </Text>
                 <View style={{ flexDirection: 'row', gap: space.xs }}>
                   {o.paymentMethod === 'cod' ? (
-                    <Pill label={o.paymentStatus === 'completed' ? 'Cash paid' : 'Cash COD'} tone={o.paymentStatus === 'completed' ? 'success' : 'warning'} />
-                  ) : null}
+                    <Pill label={o.paymentStatus === 'completed' ? 'COD Paid' : 'COD Cash'} tone={o.paymentStatus === 'completed' ? 'success' : 'warning'} />
+                  ) : (
+                    <Pill label="Prepaid" tone="info" />
+                  )}
                   <Pill label={STATUS_LABEL[o.status] ?? o.status} tone={toneFor(o.status)} />
                 </View>
               </View>

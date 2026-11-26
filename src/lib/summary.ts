@@ -118,6 +118,36 @@ export async function renderOrderSummaryPdf(job: Job, order: any = {}): Promise<
   }
   const placed = job.createdAt ? new Date(job.createdAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
   text(`Order Time: ${placed}`, { size: 10, color: grey });
+  y -= 26;
+
+  // Payment badge in header so staff can physically separate COD vs Prepaid prints at a glance
+  const paymentMethod = String(order.paymentMethod || job.paymentMethod || 'online').toLowerCase();
+  const paymentStatus = order.paymentStatus ?? job.paymentStatus;
+  const isCod = paymentMethod === 'cod';
+  const isCodPending = isCod && paymentStatus !== 'completed';
+  const badgeText = isCodPending
+    ? `COD - COLLECT CASH${amt !== undefined ? ` (Rs ${amt})` : ''}`
+    : isCod
+      ? `COD - CASH PAID${amt !== undefined ? ` (Rs ${amt})` : ''}`
+      : `PREPAID - ONLINE PAID${amt !== undefined ? ` (Rs ${amt})` : ''}`;
+  const badgeW = Math.min(qrX - M - 16, bold.widthOfTextAtSize(badgeText, 11) + 20);
+  const badgeH = 22;
+  if (isCodPending) {
+    page.drawRectangle({ x: M, y: y - 5, width: badgeW, height: badgeH, color: ink });
+    page.drawText(latin1(badgeText), { x: M + 10, y: y + 2, size: 11, font: bold, color: rgb(1, 1, 1) });
+  } else {
+    page.drawRectangle({
+      x: M,
+      y: y - 5,
+      width: badgeW,
+      height: badgeH,
+      color: isCod ? rgb(0.94, 0.94, 0.94) : rgb(0.94, 0.96, 1),
+      borderColor: isCod ? ink : blue,
+      borderWidth: 1.5,
+    });
+    page.drawText(latin1(badgeText), { x: M + 10, y: y + 2, size: 11, font: bold, color: isCod ? ink : blue });
+  }
+  y -= 8;
 
   // Move below header and QR
   y = Math.min(y, qrY - 25);
@@ -154,11 +184,17 @@ export async function renderOrderSummaryPdf(job: Job, order: any = {}): Promise<
   }
   y -= 16;
 
-  // Total Amount
+  // Payment Method & Total Amount
+  const payLine = isCodPending
+    ? 'Payment: COD (Cash on Pickup - COLLECT CASH)'
+    : isCod
+      ? 'Payment: COD (Cash Paid)'
+      : 'Payment: PREPAID (Online Paid)';
   if (amt !== undefined) {
-    const isCodPending = order.paymentMethod === 'cod' && order.paymentStatus !== 'completed';
-    const amtNote = isCodPending ? 'CASH ON PICKUP - COLLECT CASH' : order.paymentMethod === 'cod' ? 'Cash Paid' : 'Paid';
-    text(`Total Amount: Rs ${amt} (${amtNote})`, { size: 12, font: bold });
+    text(`${payLine}  |  Total: Rs ${amt}`, { size: 12, font: bold });
+    y -= 16;
+  } else {
+    text(payLine, { size: 12, font: bold });
     y -= 16;
   }
 
