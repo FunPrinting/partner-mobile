@@ -47,6 +47,14 @@ export type Job = {
     flatBuilding?: string;
     city?: string;
     pinCode?: string;
+    scheduledSlot?: {
+      date: string;
+      slotId: string;
+      label: string;
+      startTime: string;
+      endTime: string;
+      target: 'store' | 'pickup_point';
+    };
   };
   amount?: number;
   expectedDate?: string;

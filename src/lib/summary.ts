@@ -160,8 +160,13 @@ export async function renderOrderSummaryPdf(job: Job, order: any = {}): Promise<
     y -= 16;
   }
 
-  // Expected Delivery
-  if (due) {
+  // Expected Delivery / Scheduled Pickup Slot
+  if (d.scheduledSlot?.date) {
+    const slotDateStr = new Date(`${d.scheduledSlot.date}T00:00:00Z`).toLocaleDateString('en-IN', { dateStyle: 'medium', timeZone: 'UTC' });
+    const slotTime = d.scheduledSlot.label ? String(d.scheduledSlot.label).replace(/\u2013/g, '-') : '';
+    text(`Scheduled Pickup: ${slotDateStr}${slotTime ? ` | ${slotTime}` : ''}`, { size: 11, font: bold });
+    y -= 16;
+  } else if (due) {
     const dueStr = new Date(due).toLocaleDateString('en-IN', { dateStyle: 'medium' });
     text(`Expected Delivery: ${dueStr}`, { size: 11 });
     y -= 16;
