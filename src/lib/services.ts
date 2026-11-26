@@ -8,6 +8,7 @@ import { useEffect } from 'react';
 import { AppState, Platform } from 'react-native';
 import { startStationService, stopStationService } from '../../modules/printer-discovery';
 import { connect, disconnect } from './connection';
+import { emitIncomingChatEvent, refreshConversations, resetChatStore } from './chat';
 import { installGlobalErrorHandler } from './errors';
 import { onJobsSynced, resetJobs, syncJobs } from './jobs';
 import { runStation } from './printStation';
@@ -43,10 +44,15 @@ function start() {
   const unsubSynced = onJobsSynced(() => {
     runStation();
   });
+  const onChat = (payload: { conversationId?: string }) => {
+    emitIncomingChatEvent(payload);
+    refreshConversations().catch(() => undefined);
+  };
   connect(() => {
     syncJobs();
-  });
+  }, onChat);
   syncJobs();
+  refreshConversations().catch(() => undefined);
   let poll: ReturnType<typeof setInterval> | null = setInterval(() => syncJobs(), POLL_MS);
   const appState = AppState.addEventListener('change', (state) => {
     updateKeepAwake();
@@ -56,8 +62,9 @@ function start() {
     if (state === 'active') {
       connect(() => {
         syncJobs();
-      });
+      }, onChat);
       syncJobs();
+      refreshConversations().catch(() => undefined);
       if (!poll) poll = setInterval(() => syncJobs(), POLL_MS);
     } else if (state === 'background') {
       if (allowBg) {
@@ -88,6 +95,7 @@ function start() {
       stopStationService().catch(() => undefined);
     }
     resetJobs();
+    resetChatStore();
     stop = null;
   };
 }

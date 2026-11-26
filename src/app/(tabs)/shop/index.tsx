@@ -9,6 +9,18 @@ import { space, type, useTheme } from '@/theme';
 
 type Point = { latitude: number; longitude: number };
 type DeliveryPoint = { name: string; contactNumber: string; location: Point };
+type SlotItem = {
+  id: string;
+  target: 'store' | 'pickup_point';
+  pickupPointName?: string;
+  label?: string;
+  startTime: string;
+  endTime: string;
+  daysOfWeek?: number[];
+  maxOrders?: number;
+  cutoffMinutes?: number;
+  isActive?: boolean;
+};
 type Profile = {
   businessName?: string;
   isActive?: boolean;
@@ -62,6 +74,9 @@ type Profile = {
   location?: { coordinates?: [number, number] };
   address?: Record<string, string>;
   deliveryPoints?: { name: string; contactNumber?: string; location?: { coordinates?: [number, number] } }[];
+  cod?: { enabled?: boolean; allowAtPickupPoints?: boolean; maxOrderAmount?: number; cashFee?: number };
+  aiAssistant?: { enabled?: boolean; faqNotes?: string; autoPauseMinutes?: number };
+  scheduleSlots?: SlotItem[];
 };
 type Financials = { todayEarnings: number; totalEarnings: number; completedOrdersCount: number };
 
@@ -125,6 +140,16 @@ export default function ShopScreen() {
   const [location, setLocation] = useState<Point>(DEFAULT_POINT);
   const [points, setPoints] = useState<DeliveryPoint[]>([]);
   const [locating, setLocating] = useState(false);
+
+  // COD, AI Assistant & Pickup Slots
+  const [codEnabled, setCodEnabled] = useState(false);
+  const [codAllowPoints, setCodAllowPoints] = useState(false);
+  const [codMaxAmount, setCodMaxAmount] = useState('200');
+  const [codCashFee, setCodCashFee] = useState('0');
+  const [aiEnabled, setAiEnabled] = useState(true);
+  const [aiPauseMins, setAiPauseMins] = useState('45');
+  const [aiFaqNotes, setAiFaqNotes] = useState('');
+  const [slots, setSlots] = useState<SlotItem[]>([]);
 
   const load = useCallback(async () => {
     try {
@@ -202,6 +227,14 @@ export default function ShopScreen() {
       setPoints(
         (partner.deliveryPoints ?? []).map((d) => ({ name: d.name, contactNumber: d.contactNumber ?? '', location: toPoint(d.location?.coordinates) ?? DEFAULT_POINT }))
       );
+      setCodEnabled(Boolean(partner.cod?.enabled));
+      setCodAllowPoints(Boolean(partner.cod?.allowAtPickupPoints));
+      setCodMaxAmount(String(partner.cod?.maxOrderAmount ?? 200));
+      setCodCashFee(String(partner.cod?.cashFee ?? 0));
+      setAiEnabled(partner.aiAssistant?.enabled !== false);
+      setAiPauseMins(String(partner.aiAssistant?.autoPauseMinutes ?? 45));
+      setAiFaqNotes(partner.aiAssistant?.faqNotes ?? '');
+      setSlots(Array.isArray(partner.scheduleSlots) ? partner.scheduleSlots : []);
       setDirty(false);
       setError(undefined);
     } catch (err) {
@@ -372,6 +405,31 @@ export default function ShopScreen() {
         deliveryPoints: points
           .filter((d) => d.name.trim())
           .map((d) => ({ name: d.name.trim(), contactNumber: d.contactNumber.trim(), location: { type: 'Point', coordinates: [d.location.longitude, d.location.latitude] } })),
+        cod: {
+          enabled: codEnabled,
+          allowAtPickupPoints: codAllowPoints,
+          maxOrderAmount: Math.min(1000, Math.max(50, Math.round(num(codMaxAmount, 200)))),
+          cashFee: Math.min(50, Math.max(0, Math.round(num(codCashFee, 0)))),
+        },
+        aiAssistant: {
+          enabled: aiEnabled,
+          autoPauseMinutes: Math.min(240, Math.max(5, Math.round(num(aiPauseMins, 45)))),
+          faqNotes: aiFaqNotes.trim(),
+        },
+        scheduleSlots: slots
+          .filter((s) => /^\d{2}:\d{2}$/.test(s.startTime) && /^\d{2}:\d{2}$/.test(s.endTime) && s.endTime > s.startTime)
+          .map((s) => ({
+            id: s.id,
+            target: s.target === 'pickup_point' ? 'pickup_point' : 'store',
+            ...(s.target === 'pickup_point' && s.pickupPointName ? { pickupPointName: s.pickupPointName.trim() } : {}),
+            ...(s.label?.trim() ? { label: s.label.trim() } : {}),
+            startTime: s.startTime,
+            endTime: s.endTime,
+            ...(s.daysOfWeek?.length ? { daysOfWeek: s.daysOfWeek } : {}),
+            ...(s.maxOrders ? { maxOrders: Math.max(1, Math.round(Number(s.maxOrders))) } : {}),
+            cutoffMinutes: typeof s.cutoffMinutes === 'number' ? s.cutoffMinutes : 30,
+            isActive: s.isActive !== false,
+          })),
       },
     }).catch(() => null);
     setSaving(false);
@@ -697,6 +755,166 @@ export default function ShopScreen() {
             ) : (
               <Card>
                 <Body tone="tertiary">No delivery points yet.</Body>
+              </Card>
+            )}
+          </Section>
+
+          <Section
+            title="Cash on Pickup (COD)"
+            footer="Online transactions use Razorpay. COD orders require your approval in Messages before printing."
+          >
+            <Card>
+              <SwitchRow
+                first
+                title="Accept Cash on Pickup"
+                subtitle="Requires chat confirmation + summary QR scan at handover"
+                value={codEnabled}
+                onValueChange={edit(setCodEnabled)}
+              />
+              {codEnabled ? (
+                <View style={{ gap: space.sm, marginTop: space.sm }}>
+                  <SwitchRow
+                    title="Allow at external pickup points"
+                    subtitle="Off by default to prevent no-shows on carried batches"
+                    value={codAllowPoints}
+                    onValueChange={edit(setCodAllowPoints)}
+                  />
+                  <View style={{ flexDirection: 'row', gap: space.md }}>
+                    <View style={{ flex: 1 }}>
+                      <Field label="Max COD amount (₹50–1000)" keyboardType="number-pad" value={codMaxAmount} onChangeText={edit(setCodMaxAmount)} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Field label="Cash fee (₹0–50)" keyboardType="number-pad" value={codCashFee} onChangeText={edit(setCodCashFee)} />
+                    </View>
+                  </View>
+                </View>
+              ) : null}
+            </Card>
+          </Section>
+
+          <Section
+            title="AI Support Assistant"
+            footer="Replies to routine order/slot/COD queries automatically and pauses when you respond."
+          >
+            <Card>
+              <SwitchRow
+                first
+                title="Auto-answer in customer chat"
+                subtitle="Flags refunds, quality issues, and COD approvals for your reply"
+                value={aiEnabled}
+                onValueChange={edit(setAiEnabled)}
+              />
+              <Field label="Auto-pause after your reply (minutes)" keyboardType="number-pad" value={aiPauseMins} onChangeText={edit(setAiPauseMins)} />
+              <Field
+                label="Shop FAQ & pickup instructions"
+                placeholder="Open Mon–Sat 9 AM–8 PM. Rider wears blue FunPrinting bag at Let Me Bake."
+                value={aiFaqNotes}
+                onChangeText={edit(setAiFaqNotes)}
+                multiline
+                maxLength={1500}
+                style={{ minHeight: 72, textAlignVertical: 'top', paddingTop: space.sm }}
+              />
+            </Card>
+          </Section>
+
+          <Section
+            title="Pickup Time Slots"
+            footer="Store slots allow same-day pickups; pickup point slots schedule from tomorrow onwards."
+            action={
+              <Button
+                variant="plain"
+                title="Add slot"
+                onPress={() =>
+                  edit(setSlots)([
+                    ...slots,
+                    {
+                      id: `slot_${Date.now()}`,
+                      target: 'store',
+                      startTime: '10:00',
+                      endTime: '12:00',
+                      label: '10:00 AM – 12:00 PM',
+                      cutoffMinutes: 30,
+                      isActive: true,
+                    },
+                  ])
+                }
+                style={{ minHeight: 32, paddingHorizontal: 0 }}
+              />
+            }
+          >
+            {slots.length ? (
+              slots.map((s, i) => (
+                <Card key={s.id || i}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: space.sm }}>
+                    <View style={{ flexDirection: 'row', gap: space.xs }}>
+                      {(['store', 'pickup_point'] as const).map((tgt) => {
+                        const active = s.target === tgt;
+                        return (
+                          <Pressable
+                            key={tgt}
+                            onPress={() =>
+                              edit(setSlots)(
+                                slots.map((x, j) =>
+                                  j === i
+                                    ? {
+                                        ...x,
+                                        target: tgt,
+                                        pickupPointName: tgt === 'pickup_point' ? x.pickupPointName || points[0]?.name || '' : undefined,
+                                      }
+                                    : x
+                                )
+                              )
+                            }
+                            style={{
+                              paddingHorizontal: space.md,
+                              paddingVertical: 5,
+                              borderRadius: 14,
+                              backgroundColor: active ? colors.primarySoft : colors.surfaceMuted,
+                              borderWidth: 1,
+                              borderColor: active ? colors.primary : colors.border,
+                            }}
+                          >
+                            <Text style={[type.caption, { color: active ? colors.primary : colors.textSecondary, fontWeight: '600' }]}>
+                              {tgt === 'store' ? 'Main Store' : 'Pickup Point'}
+                            </Text>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                    <RemoveButton label="Remove slot" onPress={() => edit(setSlots)(slots.filter((_, j) => j !== i))} />
+                  </View>
+                  {s.target === 'pickup_point' ? (
+                    <Field
+                      label="Pickup point name"
+                      placeholder={points[0]?.name || 'Exact pickup point name'}
+                      value={s.pickupPointName || ''}
+                      onChangeText={(v) => edit(setSlots)(slots.map((x, j) => (j === i ? { ...x, pickupPointName: v } : x)))}
+                    />
+                  ) : null}
+                  <View style={{ flexDirection: 'row', gap: space.md }}>
+                    <View style={{ flex: 1 }}>
+                      <Field label="Start (HH:MM)" placeholder="10:00" value={s.startTime} onChangeText={(v) => edit(setSlots)(slots.map((x, j) => (j === i ? { ...x, startTime: v } : x)))} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Field label="End (HH:MM)" placeholder="12:00" value={s.endTime} onChangeText={(v) => edit(setSlots)(slots.map((x, j) => (j === i ? { ...x, endTime: v } : x)))} />
+                    </View>
+                  </View>
+                  <Field
+                    label="Display label (optional)"
+                    placeholder="10:00 AM – 12:00 PM"
+                    value={s.label || ''}
+                    onChangeText={(v) => edit(setSlots)(slots.map((x, j) => (j === i ? { ...x, label: v } : x)))}
+                  />
+                  <SwitchRow
+                    title="Slot active"
+                    value={s.isActive !== false}
+                    onValueChange={(v) => edit(setSlots)(slots.map((x, j) => (j === i ? { ...x, isActive: v } : x)))}
+                  />
+                </Card>
+              ))
+            ) : (
+              <Card>
+                <Body tone="tertiary">Default store windows are active. Tap "Add slot" to set custom windows.</Body>
               </Card>
             )}
           </Section>

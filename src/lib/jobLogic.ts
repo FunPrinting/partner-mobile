@@ -133,6 +133,8 @@ export type Fulfilment = 'pickup' | 'shop' | 'courier';
 
 export interface OrderLike {
   status?: string;
+  paymentMethod?: 'online' | 'cod' | string;
+  paymentStatus?: string;
   amount?: number;
   deliveryOption?: { type?: string; method?: string; deliveryCharge?: number; distance?: number };
   shiprocket?: { awbCode?: string; courierName?: string };
@@ -159,9 +161,10 @@ export function canBookCourier(order: OrderLike): boolean {
   return fulfilmentOf(order) === 'courier' && order.status === 'printed' && !order.shiprocket?.awbCode;
 }
 
-/** 90% of the printing, plus the whole delivery fee when the shop delivers itself. */
+/** 90% of printing on online orders (plus self-delivery fee), or 100% cash kept on COD orders. */
 export function partnerShare(order: OrderLike): number {
   const amount = Number(order.amount || 0);
+  if (order.paymentMethod === 'cod') return Math.round(amount * 100) / 100;
   const delivery = order.deliveryOption?.type === 'delivery' ? Number(order.deliveryOption.deliveryCharge || 0) : 0;
   return Math.round(((amount - delivery) * 0.9 + (fulfilmentOf(order) === 'shop' ? delivery : 0)) * 100) / 100;
 }
@@ -175,6 +178,7 @@ export function fulfilmentLabel(order: OrderLike): string {
 
 export const STATUS_LABEL: Record<string, string> = {
   pending_payment: 'Awaiting payment',
+  pending_cod_approval: 'Confirm COD in chat',
   paid: 'Paid',
   processing: 'Processing',
   printing: 'Printing',

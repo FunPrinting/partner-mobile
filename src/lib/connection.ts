@@ -14,6 +14,7 @@ export const connectionStore = createStore<{ connected: boolean }>({ connected: 
 let socket: Socket | null = null;
 let retryTimer: ReturnType<typeof setTimeout> | null = null;
 let onChange: (reason: string) => void = () => {};
+let onChat: (payload: { conversationId?: string }) => void = () => {};
 
 function retryAfterRefresh() {
   refresh()
@@ -29,8 +30,9 @@ function retryAfterRefresh() {
     });
 }
 
-export function connect(handler: (reason: string) => void) {
+export function connect(handler: (reason: string) => void, chatHandler?: (payload: { conversationId?: string }) => void) {
   onChange = handler;
+  onChat = chatHandler ?? (() => {});
   disconnect();
   socket = io(WSS_URL, {
     transports: ['websocket'],
@@ -56,6 +58,7 @@ export function connect(handler: (reason: string) => void) {
     if (socket && !socket.active) retryAfterRefresh();
   });
   socket.on('jobs:available', () => onChange('jobs:available'));
+  socket.on('chat:message', (data) => onChat((data && typeof data === 'object' ? data : {}) as { conversationId?: string }));
   socket.on('signed_out', () => {
     refresh().catch(() => undefined);
   });
